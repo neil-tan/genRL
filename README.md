@@ -1,3 +1,5 @@
+It doesn't work on Mac.
+
 ## Installation
 - Install dependencies with [Homebrew](https://brew.sh/)
 ```bash 
@@ -34,5 +36,5 @@ pip install -e .
 
 ## Download Assets
 ```bash
-wget https://github.com/MattDerry/pendulum_3d/raw/refs/heads/master/urdf/pendulum.urdf -P assets/urdf
+wget https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urdf -P assets/urdf
 ```

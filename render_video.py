@@ -1,5 +1,6 @@
 import genesis as gs
 import numpy as np
+import sys
 
 def main():
     gs.init(backend=gs.cpu)
@@ -28,7 +29,8 @@ def main():
         gs.morphs.Plane(),
     )
     franka = scene.add_entity(
-        gs.morphs.MJCF(file='xml/franka_emika_panda/panda.xml'),
+        # gs.morphs.MJCF(file='xml/franka_emika_panda/panda.xml'),
+        gs.morphs.URDF(file='assets/urdf/cartpole.urdf'),
     )
 
     cam = scene.add_camera(
@@ -40,21 +42,24 @@ def main():
     )
 
     scene.build()
-    gs.tools.run_in_another_thread(fn=run_sim, args=(scene, cam))
     cam.start_recording()
+    if not sys.platform == "linux":
+        gs.tools.run_in_another_thread(fn=run_sim, args=(scene, cam))
+    else:
+        run_sim(scene, cam)
     # scene.viewer.start()
+    cam.stop_recording(save_to_filename='video.mp4', fps=60)
 
 
 def run_sim(scene, cam):
-    for i in range(120):
+    for i in range(300):
         scene.step()
         cam.set_pose(
             pos    = (3.0 * np.sin(i / 60), 3.0 * np.cos(i / 60), 2.5),
             lookat = (0, 0, 0.5),
         )
         cam.render()
-    cam.stop_recording(save_to_filename='video.mp4', fps=60)
-    scene.viewer.stop()
+    # scene.viewer.stop()
 
 
 if __name__ == "__main__":
