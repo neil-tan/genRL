@@ -8,10 +8,11 @@ setup(
 	author_email='neil@utensor.ai', 
 	# packages=["thirdparty"], 
 	install_requires=[ 
-    'genesis-world',
+	'PyGEL3D==0.1.0',
     'torch',
     'torchvision',
     'torchaudio',
+    'genesis-world',
     'pytest',
 	], 
 #   extras_require={

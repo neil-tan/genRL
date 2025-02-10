@@ -1,3 +1,5 @@
+# import os
+# os.environ["IMAGEIO_FFMPEG_EXE"] = "/opt/homebrew/bin/ffmpeg"
 import genesis as gs
 gs.init(backend=gs.cpu)
 
