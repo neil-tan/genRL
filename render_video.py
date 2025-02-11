@@ -6,9 +6,9 @@ def main():
     gs.init(backend=gs.cpu)
 
     scene = gs.Scene(
-        show_viewer = False,
+        show_viewer = True,
         viewer_options = gs.options.ViewerOptions(
-            res           = (1280, 960),
+            # res           = (1280, 960),
             camera_pos    = (3.5, 0.0, 2.5),
             camera_lookat = (0.0, 0.0, 0.5),
             camera_fov    = 40,
@@ -42,16 +42,17 @@ def main():
     )
 
     scene.build()
-    cam.start_recording()
     if not sys.platform == "linux":
+        if sys.platform == "darwin" and scene._visualizer._viewer is not None:
+            scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
         gs.tools.run_in_another_thread(fn=run_sim, args=(scene, cam))
     else:
         run_sim(scene, cam)
-    # scene.viewer.start()
-    cam.stop_recording(save_to_filename='video.mp4', fps=60)
+    scene.viewer.start()
 
 
 def run_sim(scene, cam):
+    cam.start_recording()
     for i in range(300):
         scene.step()
         cam.set_pose(
@@ -59,7 +60,8 @@ def run_sim(scene, cam):
             lookat = (0, 0, 0.5),
         )
         cam.render()
-    # scene.viewer.stop()
+    cam.stop_recording(save_to_filename='video.mp4', fps=60)
+    scene.viewer.stop()
 
 
 if __name__ == "__main__":
