@@ -17,7 +17,7 @@ eval "$(pyenv init -)"
 exec "$SHELL"
 # install python 3.12.9 with tk support
 ```
-Execute the following command (in a single line) to install python 3.12.9 with tk support
+Execute the following command (**in a single line**) to install python 3.12.9 with tk support
 ```bash
 env LDFLAGS="-L$(brew --prefix openssl@1.1)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix sqlite3)/lib -L$(brew --prefix xz)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix tcl-tk)/lib" \
 CPPFLAGS="-I$(brew --prefix openssl@1.1)/include -I$(brew --prefix readline)/include -I$(brew --prefix sqlite3)/include -I$(brew --prefix xz)/include -I$(brew --prefix zlib)/include -I$(brew --prefix tcl-tk)/include" \
@@ -31,6 +31,7 @@ Or, use `pyenv local 3.12.9` to set the local python version
 
 Setup Pyenv virtual environment and install dependencies
 ```bash
+python --version # should be 3.12.9
 pyenv virtualenv genrl && pyenv activate genrl
 pip install -e .
 ```
