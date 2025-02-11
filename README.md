@@ -6,12 +6,13 @@ It doesn't work on Mac.
 brew update
 brew install ffmpeg openssl readline sqlite3 xz zlib tcl-tk
 ```
-- Install [Pyenv]()
+- Install [Pyenv](https://github.com/pyenv/pyenv)
 ```bash
 brew install pyenv
-# make sure to add the following to your shell profile
-echo 'eval "$(pyenv init --path)"' >> ~/.zshrc
-echo 'eval "$(pyenv init -)"' >> ~/.zshrc
+# Add the following to your shell profile (~/.zshrc, ~/.bashrc, etc.)
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
 # reload shell
 exec "$SHELL"
 # install python 3.12.9 with tk support

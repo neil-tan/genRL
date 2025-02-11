@@ -12,8 +12,8 @@ setup(
         'torch',
         'torchvision', 
         'torchaudio',
-        'genesis-world',
         'pyrender',
+        'genesis-world',
         'pytest',
     ],
 )
