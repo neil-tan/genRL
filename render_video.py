@@ -41,7 +41,7 @@ def main():
         res    = (640, 480),
         pos    = (3.5, 0.0, 2.5),
         lookat = (0, 0, 0.5),
-        fov    = 30,
+        fov    = 45,
         GUI    = False,
     )
 
@@ -51,7 +51,7 @@ def main():
     jnt_names = ['slider_to_cart', 'cart_to_pole']
     dofs_idx = [cartpole.get_joint(name).dof_idx_local for name in jnt_names]
     # cartpole.set_pos(np.array([0, 0, 10]))
-    cartpole.control_dofs_force(np.array([0,10]), dofs_idx)
+    cartpole.control_dofs_force(np.array([10,0]), dofs_idx)
     
     if not sys.platform == "linux":
         if sys.platform == "darwin" and scene._visualizer._viewer is not None:
@@ -64,10 +64,11 @@ def main():
 
 def run_sim(scene, cam):
     cam.start_recording()
+    angular_velocity_scaler = 0.5
     for i in range(300):
         scene.step()
         cam.set_pose(
-            pos    = (3.0 * np.sin(i / 60), 3.0 * np.cos(i / 60), 2.5),
+            pos    = (3.0 * np.sin(i / 60 * angular_velocity_scaler), 3.0 * np.cos(i / 60 * angular_velocity_scaler), 2.5),
             lookat = (0, 0, 0.5),
         )
         cam.render()
