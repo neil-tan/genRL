@@ -23,12 +23,16 @@ def main():
             ambient_light    = (0.1, 0.1, 0.1),
         ),
         renderer=gs.renderers.Rasterizer(),
+        rigid_options=gs.options.RigidOptions(
+            dt=0.01,
+            gravity=(0.0, 0.0, -10.0),
+        ),
     )
 
     plane = scene.add_entity(
         gs.morphs.Plane(),
     )
-    franka = scene.add_entity(
+    cartpole = scene.add_entity(
         # gs.morphs.MJCF(file='xml/franka_emika_panda/panda.xml'),
         gs.morphs.URDF(file='assets/urdf/cartpole.urdf'),
     )
@@ -42,6 +46,13 @@ def main():
     )
 
     scene.build()
+    
+    # jnt_names = [j.name for j in cartpole.joints]
+    jnt_names = ['slider_to_cart', 'cart_to_pole']
+    dofs_idx = [cartpole.get_joint(name).dof_idx_local for name in jnt_names]
+    # cartpole.set_pos(np.array([0, 0, 10]))
+    cartpole.control_dofs_force(np.array([0,10]), dofs_idx)
+    
     if not sys.platform == "linux":
         if sys.platform == "darwin" and scene._visualizer._viewer is not None:
             scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
