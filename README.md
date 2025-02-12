@@ -63,8 +63,3 @@ python --version # should be 3.12.9
 pyenv virtualenv genrl && pyenv activate genrl
 pip install -e .
 ```
-
-## Download Assets
-```bash
-wget https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urdf -P assets/urdf
-```

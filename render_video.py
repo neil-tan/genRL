@@ -75,6 +75,8 @@ def run_sim(scene, cartpole, cam):
     
     for i in range(300):
         scene.step()
+        if i > 50:
+            cartpole.control_dofs_force(np.array([0, 0]), dofs_idx)
         cam.set_pose(
             pos    = rotate_cam_pose(i, distance=10, angular_velocity_scaler=0.5),
             lookat = (0, 0, 0.5),
