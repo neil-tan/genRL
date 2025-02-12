@@ -71,11 +71,11 @@ def run_sim(scene, cartpole, cam):
     jnt_names = ['slider_to_cart', 'cart_to_pole']
     dofs_idx = [cartpole.get_joint(name).dof_idx_local for name in jnt_names]
     # cartpole.set_pos(np.array([0, 0, 10]))
-    cartpole.control_dofs_force(np.array([-10, 0]), dofs_idx)
+    cartpole.control_dofs_force(np.array([-25, 0]), dofs_idx)
     
     for i in range(300):
         scene.step()
-        if i > 50:
+        if i > 75:
             cartpole.control_dofs_force(np.array([0, 0]), dofs_idx)
         cam.set_pose(
             pos    = rotate_cam_pose(i, distance=10, angular_velocity_scaler=0.5),

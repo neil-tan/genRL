@@ -1,7 +1,7 @@
-<!-- This file is from the Bullet Physics SDK, linked here:
-https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urdf -->
-
 <?xml version="1.0"?>
+<!-- This file is from the Bullet Physics SDK, linked here:
+https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urdf
+-->
 <robot name="physics">
   <link name="world"/>
   <link name="slideBar">
@@ -37,7 +37,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
       <origin xyz="0 0 0"/>
     </collision>
     <inertial>
-      <mass value="1"/>
+      <mass value="5"/>
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
   </link>
@@ -62,7 +62,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
     </visual>
     <inertial>
     <origin xyz="0 0 0.5"/>
-      <mass value="1"/>
+      <mass value="0.8"/>
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
 <collision>
