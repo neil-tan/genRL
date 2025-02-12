@@ -47,19 +47,12 @@ def main():
 
     scene.build()
     
-    # jnt_names = [j.name for j in cartpole.joints]
-    # jnt_names = ['slider_to_cart', 'cart_to_pole']
-    jnt_names = ['slider_to_cart']
-    dofs_idx = [cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-    # cartpole.set_pos(np.array([0, 0, 10]))
-    cartpole.control_dofs_velocity(np.array([-5]), dofs_idx)
-    
     if not sys.platform == "linux":
         if sys.platform == "darwin" and scene._visualizer._viewer is not None:
             scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
-        gs.tools.run_in_another_thread(fn=run_sim, args=(scene, cam))
+        gs.tools.run_in_another_thread(fn=run_sim, args=(scene, cartpole, cam))
     else:
-        run_sim(scene, cam)
+        run_sim(scene, cartpole, cam)
     scene.viewer.start()
 
 def rotate_cam_pose(i, distance=3, angular_velocity_scaler=1, fps=60, flip=False):
@@ -70,8 +63,15 @@ def rotate_cam_pose(i, distance=3, angular_velocity_scaler=1, fps=60, flip=False
     return (x, y, 2)
 
 
-def run_sim(scene, cam):
+def run_sim(scene, cartpole, cam):
     cam.start_recording()
+    
+    # jnt_names = [j.name for j in cartpole.joints]
+    # jnt_names = ['slider_to_cart', 'cart_to_pole']
+    jnt_names = ['slider_to_cart', 'cart_to_pole']
+    dofs_idx = [cartpole.get_joint(name).dof_idx_local for name in jnt_names]
+    # cartpole.set_pos(np.array([0, 0, 10]))
+    cartpole.control_dofs_force(np.array([-10, 0]), dofs_idx)
     
     for i in range(300):
         scene.step()
