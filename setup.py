@@ -12,6 +12,7 @@ setup(
         'torch',
         'torchvision', 
         'torchaudio',
+        'gymnasium',
         'genesis-world',
         'pytest',
     ],
