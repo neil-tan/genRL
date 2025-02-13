@@ -82,6 +82,24 @@ def run_sim(scene, cartpole, cam):
             lookat = (0, 0, 0.5),
         )
         cam.render()
+        if i % 50 == 0:
+            cart_position = cartpole.get_dofs_position(dofs_idx)[0]
+            cart_position_l = cartpole.get_link("cart").get_pos()
+            
+            cart_velocity = cartpole.get_dofs_velocity(dofs_idx)[0]
+            cart_velocity_l = cartpole.get_link("cart").get_vel()
+            
+            cart_angle_velocity = cartpole.get_link("cart").get_ang() # always 0
+            pole_position = cartpole.get_dofs_position(dofs_idx)[1]
+            # pole_angle = cartpole.joints[dofs_idx[1]].dofs_motion_ang
+            # pole_angle_velocity = cartpole.joints[dofs_idx[1]].dofs_motion_vel
+            pole_angle_velocity = cartpole.get_link("pole").get_ang()
+            pole_angle = cartpole.get_link("pole").get_quat()
+            # pole_angle_j = cartpole.get_joint('cart_to_pole').get_quat() # always [1, 0, 0, 0]
+            
+            pole_height = cartpole.links[dofs_idx[1]].get_AABB()
+            pole_height_l = cartpole.get_link("pole").get_AABB()[1,2] - cartpole.get_joint('cart_to_pole').get_pos()[2]
+            
     cam.stop_recording(save_to_filename='video.mp4', fps=60)
     scene.viewer.stop()
 
