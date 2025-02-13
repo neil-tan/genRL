@@ -1,6 +1,7 @@
 
 
 ## Installation
+Please stick to the Miniconda installation for now. Pyenv is not working on Mac.
 - Install dependencies with [Homebrew](https://brew.sh/)
 ```bash 
 brew update
@@ -62,4 +63,10 @@ Setup Pyenv virtual environment and install dependencies
 python --version # should be 3.12.9
 pyenv virtualenv genrl && pyenv activate genrl
 pip install -e .
+```
+
+### Run Example
+```bash
+conda activate genRL
+python render_video.py
 ```
