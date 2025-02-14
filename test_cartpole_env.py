@@ -19,3 +19,6 @@ custom_environment_spec = gym.envs.registration.EnvSpec(id='my_env/gen_cartpole-
 env = gym.make(custom_environment_spec, render_mode="rgb_array", max_force=1000, targetVelocity=1)
 
 # %%
+env.reset()
+# %%
+env.close()

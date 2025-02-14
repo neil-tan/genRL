@@ -124,9 +124,15 @@ class GenCartPoleEnv(gym.Env):
         )
 
     def _step_simulation(self):
-        self.scene.step()
-        self.cam.render()
-        self.current_steps_count += 1
+        def _step_implementation():
+            self.scene.step()
+            self.cam.render()
+            self.current_steps_count += 1
+
+        if not sys.platform == "linux":
+            gs.tools.run_in_another_thread(fn=_step_implementation, args=())
+        else:
+            _step_implementation
         # self.scene.viewer.stop()
 
     def reset(self, seed=None, options=None):
@@ -156,6 +162,7 @@ class GenCartPoleEnv(gym.Env):
 
         self.cam.start_recording()
         self._step_simulation()
+        # self._step_simulation()
 
         return self._get_obs(), self._get_info()
 
@@ -173,10 +180,7 @@ class GenCartPoleEnv(gym.Env):
         #                         force=self.max_force,
         #                         physicsClientId=self.physID)
 
-        if not sys.platform == "linux":
-            gs.tools.run_in_another_thread(fn=self._step_simulation, args=(self,))
-        else:
-            self._step_simulation()
+        self._step_simulation()
 
         observation = self._get_obs()
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
