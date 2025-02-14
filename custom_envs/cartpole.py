@@ -8,7 +8,7 @@ from transforms3d import euler
 
 
 # %%
-class CartPolePyBulletEnv(gym.Env):
+class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
 
     def __init__(self, render_mode=None, targetVelocity=0.1, max_force=100, step_scaler:int=1):
@@ -25,8 +25,8 @@ class CartPolePyBulletEnv(gym.Env):
         self.done = False
 
         # [Cart Position, Cart Velocity, Pole Angle (rad), Pole Velocity]
-        self.observation_space = spaces.Box(np.array([-4.8000002e+00, -3.4028235e+38, -4.1887903e-01, -3.4028235e+38]),
-                                            np.array([4.8000002e+00, 3.4028235e+38, 4.1887903e-01, 3.4028235e+38]), (4,), np.float32)
+        self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
+                                            np.array([4.8000002e+00, np.inf, 4.1887903e-01, np.inf]), (4,), np.float32)
         
         self.action_space = spaces.Discrete(1)
 
@@ -78,8 +78,8 @@ class CartPolePyBulletEnv(gym.Env):
 
         self.scene.build()
         
-        self.cartpole.set_dofs_force_range(-self.max_force, self.max_force)
-        self._init_state = self.get_state()
+        self.cartpole.set_dofs_force_range(np.array([-self.max_force]), np.array([self.max_force]), [self.cartpole.get_joint('slider_to_cart').dof_idx_local])
+        self._init_state = self.scene.get_state()
         
         # if not sys.platform == "linux":
         #     if sys.platform == "darwin" and scene._visualizer._viewer is not None:
@@ -150,9 +150,9 @@ class CartPolePyBulletEnv(gym.Env):
         init_pole_velocity = random_condition_gen()
         
         jnt_names = ['slider_to_cart', 'cart_to_pole']
-        dofs_idx = [self.cartpole.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-        self.cartpole.cartpole.set_dofs_position(np.array([init_cart_position, init_pole_pos]), dofs_idx)
-        self.cartpole.cartpole.set_dofs_velocity(np.array([init_cart_velocity, init_pole_velocity]), dofs_idx)
+        dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
+        self.cartpole.set_dofs_position(np.array([init_cart_position, init_pole_pos]), dofs_idx)
+        self.cartpole.set_dofs_velocity(np.array([init_cart_velocity, init_pole_velocity]), dofs_idx)
 
         self.cam.start_recording()
         self._step_simulation()
@@ -164,7 +164,7 @@ class CartPolePyBulletEnv(gym.Env):
         # x, y, z = position
         
         jnt_names = ['slider_to_cart', 'cart_to_pole']
-        dofs_idx = [self.cartpole.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
+        dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
         self.cartpole.control_dofs_velocity(np.array([self.targetVelocity if action == 1 else -self.targetVelocity, 0]), dofs_idx)
 
         # p.setJointMotorControl2(self.cartpole, 0,
