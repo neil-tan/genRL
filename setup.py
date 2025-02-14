@@ -13,6 +13,7 @@ setup(
         'torchvision', 
         'torchaudio',
         'gymnasium',
+        'transforms3d',
         'genesis-world',
         'pytest',
     ],
