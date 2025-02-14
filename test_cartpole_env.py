@@ -19,7 +19,7 @@ custom_environment_spec = gym.envs.registration.EnvSpec(id='my_env/gen_cartpole-
                                                    max_episode_steps=2000,
                                                    )
 # %%
-env = gym.make(custom_environment_spec, render_mode="ansi", max_force=1000, targetVelocity=5)
+env = gym.make(custom_environment_spec, render_mode="human", max_force=1000, targetVelocity=5)
 
 # %%
 def training_loop(env, max_steps=300):
@@ -41,8 +41,11 @@ else:
     training_loop(env, 300)
 
 # Render every second
-for _ in range(8):  # Render 10 times
+while True:
     env.render()
+    if env.unwrapped.done == True:
+        break
     time.sleep(1)
+    
 # %%
 print("finished")
