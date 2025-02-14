@@ -5,6 +5,7 @@ import gymnasium as gym
 import custom_envs.cartpole as gen_cartpole
 import genesis as gs
 import sys
+import time
 
 # %%
 # set random seed
@@ -18,24 +19,19 @@ custom_environment_spec = gym.envs.registration.EnvSpec(id='my_env/gen_cartpole-
                                                    max_episode_steps=2000,
                                                    )
 # %%
-env = gym.make(custom_environment_spec, render_mode="human", max_force=1000, targetVelocity=5)
+env = gym.make(custom_environment_spec, render_mode="ansi", max_force=1000, targetVelocity=5)
 
 # %%
 def training_loop(env, max_steps=300):
     env.reset()
-    print_state = lambda obs: print(f"Cart Position: {obs[0]}; Pole Angle: {obs[2]}")
     for i in range(max_steps):
         action = env.action_space.sample()
         # observation, reward, done, truncated, info
         obs, reward, done, _, info = env.step(action)
-        if i % 20 == 0:
-            print_state(obs)
+    
         if done:
-            print(f"Episode finished after {i+1} steps")
             break
-    print_state(obs)
-    # env.unwrapped.scene.viewer.stop()
-    # env.unwrapped._stop_viewer()
+
     env.close() # stop the viewer and save the video
 
 # %%
@@ -44,6 +40,9 @@ if not sys.platform == "linux":
 else:
     training_loop(env, 300)
 
-env.render()
+# Render every second
+for _ in range(8):  # Render 10 times
+    env.render()
+    time.sleep(1)
 # %%
 print("finished")
