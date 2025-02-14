@@ -6,7 +6,7 @@ setup(
     description='RL Blitz', 
     author='Neil Tan', 
     author_email='neil@utensor.ai',
-    package_dir={'': 'src'},
+    # package_dir={'': 'src'},
     packages=find_packages(where='src'),
     install_requires=[ 
         'torch',
