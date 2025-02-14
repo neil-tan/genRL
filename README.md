@@ -68,5 +68,5 @@ pip install -e .
 ### Run Example
 ```bash
 conda activate genRL
-python render_video.py
+python test_cartpole_env.py
 ```
