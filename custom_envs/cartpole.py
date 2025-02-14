@@ -9,7 +9,7 @@ from transforms3d import euler
 
 # %%
 class GenCartPoleEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
+    metadata = {"render_modes": ["human", "rgb_array", "ansi"], "render_fps": 60}
 
     def __init__(self, render_mode=None, targetVelocity=0.1, max_force=100, step_scaler:int=1):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -195,9 +195,6 @@ class GenCartPoleEnv(gym.Env):
         return self.cartpole.get_link("cart").get_pos()[0]
     
     def render(self):
-        if self.render_mode is not None and self.render_mode != "human":
-            raise NotImplementedError("Only human render mode is supported")
-
         if self.render_mode == "rgb_array":
             # img_arr = p.getCameraImage(
             #                             width,
@@ -231,12 +228,19 @@ class GenCartPoleEnv(gym.Env):
             # This is a blocking call
             # on Mac, it has to run in the main threads
             self.scene.viewer.start()
+        elif self.render_mode == "ansi":
+            obs = self._get_obs()
+            print(f"Cart Position: {obs[0]}; Pole Angle: {obs[2]}")
     
     def close(self):
-        if self.render_mode == "human":
-            self.scene.viewer.stop()
+        self._stop_viewer()
         self._stop_recording()
     
     def _stop_recording(self):
         if self.cam._in_recording:
             self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+    
+    def _stop_viewer(self):
+        # self.scene._visualizer._viewer
+        if self.scene.viewer and self.scene.viewer.is_alive():
+            self.scene.viewer.stop()
