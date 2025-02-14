@@ -233,10 +233,14 @@ class GenCartPoleEnv(gym.Env):
             self.scene.viewer.start()
     
     def close(self):
-        if self.render_mode == "human":
-            self.scene.viewer.stop()
+        self._stop_viewer()
         self._stop_recording()
     
     def _stop_recording(self):
         if self.cam._in_recording:
             self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+    
+    def _stop_viewer(self):
+        # self.scene._visualizer._viewer
+        if self.scene.viewer and self.scene.viewer.is_alive():
+            self.scene.viewer.stop()

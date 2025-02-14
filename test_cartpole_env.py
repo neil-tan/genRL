@@ -34,8 +34,10 @@ def training_loop(env, max_steps=300):
             print(f"Episode finished after {i+1} steps")
             break
     print_state(obs)
-    env.unwrapped.scene.viewer.stop()
-        
+    # env.unwrapped.scene.viewer.stop()
+    # env.unwrapped._stop_viewer()
+    env.close() # stop the viewer and save the video
+
 # %%
 if not sys.platform == "linux":
     gs.tools.run_in_another_thread(fn=training_loop, args=(env, 300))
@@ -43,9 +45,5 @@ else:
     training_loop(env, 300)
 
 env.render()
-# %%
-## TODO: consider moving camera save outside of close()
-env.close()
-
 # %%
 print("finished")
