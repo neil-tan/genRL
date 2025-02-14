@@ -1,6 +1,7 @@
 import genesis as gs
 import numpy as np
 import sys
+from transforms3d import euler
 
 def main():
     gs.init(backend=gs.cpu)
@@ -83,18 +84,19 @@ def run_sim(scene, cartpole, cam):
         )
         cam.render()
         if i % 50 == 0:
-            cart_position = cartpole.get_dofs_position(dofs_idx)[0]
-            cart_position_l = cartpole.get_link("cart").get_pos()
+            slider_to_cart_position = cartpole.get_dofs_position(dofs_idx)[0]
+            cart_position_l = cartpole.get_link("cart").get_pos()[0] # x ~ xyz
             
             cart_velocity = cartpole.get_dofs_velocity(dofs_idx)[0]
-            cart_velocity_l = cartpole.get_link("cart").get_vel()
+            cart_velocity_l = cartpole.get_link("cart").get_vel() # xyz
             
             cart_angle_velocity = cartpole.get_link("cart").get_ang() # always 0
-            pole_position = cartpole.get_dofs_position(dofs_idx)[1]
+            cart_to_pole_position = cartpole.get_dofs_position(dofs_idx)[1]
             # pole_angle = cartpole.joints[dofs_idx[1]].dofs_motion_ang
             # pole_angle_velocity = cartpole.joints[dofs_idx[1]].dofs_motion_vel
             pole_angle_velocity = cartpole.get_link("pole").get_ang()
-            pole_angle = cartpole.get_link("pole").get_quat()
+            pole_angle = euler.quat2euler(cartpole.get_link("pole").get_quat(), axes='sxyz')
+            pole_position_l = cartpole.get_link("pole").get_pos()
             # pole_angle_j = cartpole.get_joint('cart_to_pole').get_quat() # always [1, 0, 0, 0]
             
             pole_height = cartpole.links[dofs_idx[1]].get_AABB()

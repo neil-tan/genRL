@@ -4,6 +4,7 @@ import genesis as gs
 import sys
 import gymnasium as gym
 from gymnasium import spaces
+from transforms3d import euler
 
 
 # %%
@@ -99,30 +100,20 @@ class CartPolePyBulletEnv(gym.Env):
         # Pole Angle -0.418 ~ 0.418
         # Pole Velocity At Tip -inf ~ inf
         
-        jnt_names = ['slider_to_cart', 'cart_to_pole']
-        dofs_idx = [self.cartpole.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
+        cartpole = self.cartpole
 
         # assume only moves in x
-        cart_position = self.cartpole.get_dofs_position(dofs_idx)[0]
-        # cart_position = p.getLinkState(self.cartpole, 0, computeLinkVelocity=1, physicsClientId=self.physID)[0][0]
-        cart_velocity = self.cartpole.get_dofs_velocity(dofs_idx)[0]
-        # cart_velocity = p.getLinkState(self.cartpole, 0, computeLinkVelocity=1, physicsClientId=self.physID)[6][0]
-        
-        _, pole_angular_velocity, pole_angle = self._getPoleStates(self.cartpole)
+        cart_position = cartpole.get_link("cart").get_pos()[0]
+        cart_velocity = cartpole.get_link("cart").get_vel()[0]
+        pole_angular_velocity = cartpole.get_link("pole").get_ang()[1]
+        pole_angle = euler.quat2euler(cartpole.get_link("pole").get_quat(), axes='sxyz')[1]
+        # pole_position = cartpole.get_link("pole").get_pos()
         
         result = np.array([cart_position, cart_velocity, pole_angle, pole_angular_velocity], dtype=np.float32)
         return result
 
     def _get_info(self):
         return {}
-        
-    def _getPoleStates(self, cartpole):
-        link_state = p.getLinkState(cartpole, 1, computeLinkVelocity=1, physicsClientId=self.physID)
-        position = link_state[0]
-        angular_velocity = link_state[7][1]
-        # assuming the pole is not rotating around the x and y axis
-        angle = p.getAxisAngleFromQuaternion(link_state[5], physicsClientId=self.physID)[1]
-        return position, angular_velocity, angle
 
     def _should_terminate(self, position, angle):
         return (
@@ -135,10 +126,13 @@ class CartPolePyBulletEnv(gym.Env):
     def _step_simulation(self):
         self.scene.step()
         self.cam.render()
+        self.current_steps_count += 1
         # self.scene.viewer.stop()
 
     def reset(self, seed=None, options=None):
-        self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+        if self.cam._in_recording:
+            self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+
         super().reset(seed=seed)
         self._seed = seed
         self._options = options
@@ -179,7 +173,10 @@ class CartPolePyBulletEnv(gym.Env):
         #                         force=self.max_force,
         #                         physicsClientId=self.physID)
 
-        self._step_simulation()
+        if not sys.platform == "linux":
+            gs.tools.run_in_another_thread(fn=self._step_simulation, args=(self,))
+        else:
+            self._step_simulation()
 
         observation = self._get_obs()
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
@@ -193,44 +190,50 @@ class CartPolePyBulletEnv(gym.Env):
 
     
     def getPoleHeight(self):
-        pole_aabb_max = p.getAABB(self.cartpole, 1, physicsClientId=self.physID)[1]   
-        cart_aabb_max = p.getAABB(self.cartpole, 0, physicsClientId=self.physID)[1]
+        pole_height = self.cartpole.get_link("pole").get_AABB()[1,2] \
+                        - self.cartpole.get_joint('cart_to_pole').get_pos()[2]
 
-        return pole_aabb_max[2] - cart_aabb_max[2]
+        return pole_height
     
     def getCartPosition(self):
-        link_state = p.getLinkState(self.cartpole, 0, computeLinkVelocity=1, physicsClientId=self.physID)
-        return link_state[0]
+        return self.cartpole.get_link("cart").get_pos()[0]
     
-    def render(self, width=320, height=240):
+    def render(self):
         if self.render_mode is not None and self.render_mode != "rgb_array":
             raise NotImplementedError("Only rgb_array render mode is supported")
 
         if self.render_mode == "rgb_array":
-            img_arr = p.getCameraImage(
-                                        width,
-                                        height,
-                                        viewMatrix=p.computeViewMatrixFromYawPitchRoll(
-                                            cameraTargetPosition=[0, 0, 0.5],
-                                            distance=2.5,
-                                            yaw=0,
-                                            pitch=-15,
-                                            roll=0,
-                                            upAxisIndex=2,
-                                        ),
-                                        projectionMatrix=p.computeProjectionMatrixFOV(
-                                            fov=60,
-                                            aspect=width/height,
-                                            nearVal=0.01,
-                                            farVal=100,
-                                        ),
-                                        shadow=True,
-                                        lightDirection=[1, 1, 1],
-                                        physicsClientId=self.physID,
-                                    )
-            w, h, rgba, depth, mask = img_arr
-            rgba_image = Image.fromarray(rgba.reshape(h, w, 4).astype(np.uint8))
-            return rgba_image
+            # img_arr = p.getCameraImage(
+            #                             width,
+            #                             height,
+            #                             viewMatrix=p.computeViewMatrixFromYawPitchRoll(
+            #                                 cameraTargetPosition=[0, 0, 0.5],
+            #                                 distance=2.5,
+            #                                 yaw=0,
+            #                                 pitch=-15,
+            #                                 roll=0,
+            #                                 upAxisIndex=2,
+            #                             ),
+            #                             projectionMatrix=p.computeProjectionMatrixFOV(
+            #                                 fov=60,
+            #                                 aspect=width/height,
+            #                                 nearVal=0.01,
+            #                                 farVal=100,
+            #                             ),
+            #                             shadow=True,
+            #                             lightDirection=[1, 1, 1],
+            #                             physicsClientId=self.physID,
+            #                         )
+            # w, h, rgba, depth, mask = img_arr
+            # rgba_image = Image.fromarray(rgba.reshape(h, w, 4).astype(np.uint8))
+            # return rgba_image
+            pass
+        elif self.render_mode == "human":
+            # retina display fix
+            if sys.platform == "darwin" and self.scene._visualizer._viewer is not None:
+                self.scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
+            self.scene.viewer.start()
     
     def close(self):
-        p.disconnect(physicsClientId=self.physID)
+        if self.render_mode == "human":
+            self.scene.viewer.stop()
