@@ -9,7 +9,7 @@ from transforms3d import euler
 
 # %%
 class GenCartPoleEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array", "ansi"], "render_fps": 60}
+    metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
 
     def __init__(self, render_mode=None, targetVelocity=0.1, max_force=100, step_scaler:int=1):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -21,6 +21,7 @@ class GenCartPoleEnv(gym.Env):
         self.targetVelocity = targetVelocity
         self.max_force = max_force
         self.step_scaler = step_scaler
+        self.current_steps_count = 0
 
         self.done = False
 
@@ -80,17 +81,7 @@ class GenCartPoleEnv(gym.Env):
         
         self.cartpole.set_dofs_force_range(np.array([-self.max_force]), np.array([self.max_force]), [self.cartpole.get_joint('slider_to_cart').dof_idx_local])
         self._init_state = self.scene.get_state()
-        
-        # if not sys.platform == "linux":
-        #     if sys.platform == "darwin" and scene._visualizer._viewer is not None:
-        #         scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
-        #     gs.tools.run_in_another_thread(fn=run_sim, args=(scene, cartpole, cam))
-        # else:
-        #     run_sim(scene, cartpole, cam)
-        # scene.viewer.start()
 
-        # self.physID = p.connect(p.DIRECT)
-        # p.setAdditionalSearchPath(pybullet_data.getDataPath())
         self.reset()
 
     def _get_obs(self):
@@ -139,7 +130,6 @@ class GenCartPoleEnv(gym.Env):
         self.done = False
 
         self.scene.reset(self._init_state)
-        # p.setJointMotorControl2(self.cartpole, 1, p.VELOCITY_CONTROL, targetVelocity=0, force=0, physicsClientId=self.physID)
 
         # randomize initial condition
         random_condition_gen = lambda : np.random.uniform(low=-0.05, high=0.05)
@@ -158,18 +148,11 @@ class GenCartPoleEnv(gym.Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action):
-        # position, orientation = p.getBasePositionAndOrientation(self.cartpole)
-        # x, y, z = position
+        # assert self.action_space.contains(action)
         
         jnt_names = ['slider_to_cart', 'cart_to_pole']
         dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
         self.cartpole.control_dofs_velocity(np.array([self.targetVelocity if action == 1 else -self.targetVelocity, 0]), dofs_idx)
-
-        # p.setJointMotorControl2(self.cartpole, 0,
-        #                         p.VELOCITY_CONTROL,
-        #                         targetVelocity=self.targetVelocity if action == 1 else -self.targetVelocity,
-        #                         force=self.max_force,
-        #                         physicsClientId=self.physID)
 
         self._step_simulation()
 
@@ -195,34 +178,8 @@ class GenCartPoleEnv(gym.Env):
         return self.cartpole.get_link("cart").get_pos()[0]
     
     def render(self):
-        if self.render_mode == "rgb_array":
-            # img_arr = p.getCameraImage(
-            #                             width,
-            #                             height,
-            #                             viewMatrix=p.computeViewMatrixFromYawPitchRoll(
-            #                                 cameraTargetPosition=[0, 0, 0.5],
-            #                                 distance=2.5,
-            #                                 yaw=0,
-            #                                 pitch=-15,
-            #                                 roll=0,
-            #                                 upAxisIndex=2,
-            #                             ),
-            #                             projectionMatrix=p.computeProjectionMatrixFOV(
-            #                                 fov=60,
-            #                                 aspect=width/height,
-            #                                 nearVal=0.01,
-            #                                 farVal=100,
-            #                             ),
-            #                             shadow=True,
-            #                             lightDirection=[1, 1, 1],
-            #                             physicsClientId=self.physID,
-            #                         )
-            # w, h, rgba, depth, mask = img_arr
-            # rgba_image = Image.fromarray(rgba.reshape(h, w, 4).astype(np.uint8))
-            # return rgba_image
-            pass
-        elif self.render_mode == "human":
-            # retina display fix
+        if self.render_mode == "human":
+            # retina display workaround
             if sys.platform == "darwin" and self.scene._visualizer._viewer is not None:
                 self.scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
             # This is a blocking call
