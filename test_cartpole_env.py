@@ -30,7 +30,7 @@ def training_loop(env, max_steps=300):
         if done:
             print(f"Episode finished after {i+1} steps")
             break
-    env.scene.viewer.stop()
+    env.unwrapped.scene.viewer.stop()
         
 # %%
 if not sys.platform == "linux":
@@ -40,7 +40,8 @@ else:
 
 env.render()
 # %%
-# env.close()
+## TODO: consider moving camera save outside of close()
+env.close()
 
 # %%
 print("finished")
