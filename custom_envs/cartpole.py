@@ -38,7 +38,7 @@ class GenCartPoleEnv(gym.Env):
         gs.init(backend=gs.cpu)
 
         self.scene = gs.Scene(
-            show_viewer = True,
+            show_viewer = self.render_mode == "human",
             viewer_options = gs.options.ViewerOptions(
                 # res           = (1280, 960),
                 camera_pos    = (3.5, 0.0, 2.5),
@@ -124,20 +124,13 @@ class GenCartPoleEnv(gym.Env):
         )
 
     def _step_simulation(self):
-        def _step_implementation():
-            self.scene.step()
-            self.cam.render()
-            self.current_steps_count += 1
-
-        if not sys.platform == "linux":
-            gs.tools.run_in_another_thread(fn=_step_implementation, args=())
-        else:
-            _step_implementation
+        self.scene.step()
+        self.cam.render()
+        self.current_steps_count += 1
         # self.scene.viewer.stop()
 
     def reset(self, seed=None, options=None):
-        if self.cam._in_recording:
-            self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+        self._stop_recording()
 
         super().reset(seed=seed)
         self._seed = seed
@@ -161,8 +154,6 @@ class GenCartPoleEnv(gym.Env):
         self.cartpole.set_dofs_velocity(np.array([init_cart_velocity, init_pole_velocity]), dofs_idx)
 
         self.cam.start_recording()
-        self._step_simulation()
-        # self._step_simulation()
 
         return self._get_obs(), self._get_info()
 
@@ -190,6 +181,7 @@ class GenCartPoleEnv(gym.Env):
             self.done = self._should_terminate(cart_position, pole_angle)
             reward = 1.0
 
+        # observation, reward, done, truncated, info
         return observation, reward, self.done, False, self._get_info()
 
     
@@ -203,8 +195,8 @@ class GenCartPoleEnv(gym.Env):
         return self.cartpole.get_link("cart").get_pos()[0]
     
     def render(self):
-        if self.render_mode is not None and self.render_mode != "rgb_array":
-            raise NotImplementedError("Only rgb_array render mode is supported")
+        if self.render_mode is not None and self.render_mode != "human":
+            raise NotImplementedError("Only human render mode is supported")
 
         if self.render_mode == "rgb_array":
             # img_arr = p.getCameraImage(
@@ -236,8 +228,15 @@ class GenCartPoleEnv(gym.Env):
             # retina display fix
             if sys.platform == "darwin" and self.scene._visualizer._viewer is not None:
                 self.scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
+            # This is a blocking call
+            # on Mac, it has to run in the main threads
             self.scene.viewer.start()
     
     def close(self):
         if self.render_mode == "human":
             self.scene.viewer.stop()
+        self._stop_recording()
+    
+    def _stop_recording(self):
+        if self.cam._in_recording:
+            self.cam.stop_recording(save_to_filename='video.mp4', fps=60)

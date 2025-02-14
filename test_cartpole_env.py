@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import gymnasium as gym
 import custom_envs.cartpole as gen_cartpole
+import genesis as gs
+import sys
 
 # %%
 # set random seed
@@ -16,9 +18,29 @@ custom_environment_spec = gym.envs.registration.EnvSpec(id='my_env/gen_cartpole-
                                                    max_episode_steps=2000,
                                                    )
 # %%
-env = gym.make(custom_environment_spec, render_mode="rgb_array", max_force=1000, targetVelocity=1)
+env = gym.make(custom_environment_spec, render_mode="human", max_force=1000, targetVelocity=1)
 
 # %%
-env.reset()
+def training_loop(env, max_steps=300):
+    env.reset()
+    for i in range(max_steps):
+        action = env.action_space.sample()
+        # observation, reward, done, truncated, info
+        obs, reward, done, _, info = env.step(action)
+        if done:
+            print(f"Episode finished after {i+1} steps")
+            break
+    env.scene.viewer.stop()
+        
 # %%
-env.close()
+if not sys.platform == "linux":
+    gs.tools.run_in_another_thread(fn=training_loop, args=(env, 300))
+else:
+    training_loop(env, 300)
+
+env.render()
+# %%
+# env.close()
+
+# %%
+print("finished")
