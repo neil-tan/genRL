@@ -4,3 +4,5 @@ __pycache__
 *.mp4
 *.egg-info
 *.egg
+
+dist/

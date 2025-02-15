@@ -1,5 +1,5 @@
 import pytest
-import gym_envs.genesis.cartpole as gen_cartpole
+import genRL.gym_envs.genesis.cartpole as gen_cartpole
 import os
 import gymnasium as gym
 import logging
