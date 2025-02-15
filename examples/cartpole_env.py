@@ -2,7 +2,7 @@
 import numpy as np
 import torch
 import gymnasium as gym
-import custom_envs.cartpole as gen_cartpole
+import gym_envs.genesis.cartpole as gen_cartpole
 import genesis as gs
 import sys
 import time
