@@ -20,7 +20,7 @@ rm ~/miniconda3/miniconda.sh
 ```bash
 # Replace <PATH-TO-CONDA> with the file path to your conda installation
 # <PATH-TO-CONDA>/bin/conda init zsh
-~/minianaconda3/bin/conda init zsh
+~/miniconda3/bin/conda init zsh
 ```
 - If you have Pyenv on your system, it's a good idea to set conda auto-activate to false
 ```bash
