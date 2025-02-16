@@ -44,7 +44,7 @@ class GenCartPoleEnv(gym.Env):
         
         
         ### simulator setup
-        gs.init(backend=gs.cpu)
+        gs.init(backend=gs.cpu, logging_level='warning')
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",

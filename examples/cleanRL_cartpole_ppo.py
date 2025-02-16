@@ -8,12 +8,11 @@ import sys
 import time
 
 #Hyperparameters
-learning_rate = 0.0005
-gamma         = 0.98
-lmbda         = 0.95
+learning_rate = 0.01
+gamma         = 0.99
+lmbda         = 0.97
 eps_clip      = 0.1
-K_epoch       = 3
-T_horizon     = 20
+T_horizon     = 1000
 
 
 def training_loop(env):
@@ -47,7 +46,7 @@ def training_loop(env):
     env.close()
 
 def main():
-    env = gym.make("GenCartPole-v0", render_mode="human", max_force=1000, targetVelocity=5)
+    env = gym.make("GenCartPole-v0", render_mode="human", max_force=1000, targetVelocity=10)
 
     if not sys.platform == "linux":
         gs.tools.run_in_another_thread(fn=training_loop, args=(env,))
