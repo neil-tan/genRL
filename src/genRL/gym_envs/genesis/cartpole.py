@@ -171,7 +171,7 @@ class GenCartPoleEnv(gym.Env):
         velocity_inputs = action - 0.5
         velocity_inputs = velocity_inputs * self.targetVelocity * 2
         
-        if len(velocity_inputs.shape) == 0:
+        if len(getattr(velocity_inputs, "shape", [])) == 0:
             velocity_inputs = torch.tensor([velocity_inputs]).unsqueeze(0)
             
         self.cartpole.control_dofs_velocity(velocity_inputs, dofs_idx)
