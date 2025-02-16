@@ -5,15 +5,23 @@ import sys
 import gymnasium as gym
 from gymnasium import spaces
 from transforms3d import euler
-
+import torch
 
 # %%
 class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
 
-    def __init__(self, render_mode=None, targetVelocity=0.1, max_force=100, step_scaler:int=1):
+    def __init__(self,
+                 render_mode=None,
+                 num_envs=1,
+                 targetVelocity=0.1,
+                 max_force=100,
+                 step_scaler:int=1,
+                 **kwargs,
+                 ):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        self.num_envs = num_envs
 
         self.x_threshold = 2.4
         self.theta_threshold_degrees = 12
@@ -23,7 +31,7 @@ class GenCartPoleEnv(gym.Env):
         self.step_scaler = step_scaler
         self.current_steps_count = 0
 
-        self.done = False
+        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool)
 
         # [Cart Position, Cart Velocity, Pole Angle (rad), Pole Velocity]
         self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
@@ -77,14 +85,15 @@ class GenCartPoleEnv(gym.Env):
             GUI    = False,
         )
 
-        self.scene.build()
+        # self.scene.build(n_envs=0 if self.num_envs==1 else self.num_envs, env_spacing=(10, 1))
+        self.scene.build(n_envs=self.num_envs, env_spacing=(10, 1))
         
         self.cartpole.set_dofs_force_range(np.array([-self.max_force]), np.array([self.max_force]), [self.cartpole.get_joint('slider_to_cart').dof_idx_local])
         self._init_state = self.scene.get_state()
 
         self.reset()
 
-    def _get_obs(self):
+    def _get_observation_tuple(self):
         # Returns
         # Cart Position -4.8 ~ 4.8        
         # Cart Velocity -inf ~ inf
@@ -92,27 +101,33 @@ class GenCartPoleEnv(gym.Env):
         # Pole Velocity At Tip -inf ~ inf
         
         cartpole = self.cartpole
-
-        # assume only moves in x
-        cart_position = cartpole.get_link("cart").get_pos()[0]
-        cart_velocity = cartpole.get_link("cart").get_vel()[0]
-        pole_angular_velocity = cartpole.get_link("pole").get_ang()[1]
-        pole_angle = euler.quat2euler(cartpole.get_link("pole").get_quat(), axes='sxyz')[1]
-        # pole_position = cartpole.get_link("pole").get_pos()
+        # vectorized
+        cart_position = cartpole.get_link("cart").get_pos()[:,0]
+        cart_velocity = cartpole.get_link("cart").get_vel()[:,0]
+        pole_angular_velocity = cartpole.get_link("pole").get_ang()[:,1]
+        pole_quant = cartpole.get_link("pole").get_quat()
+        pole_angle = torch.tensor([euler.quat2euler(pole_quant[i], axes='sxyz')[1] for i in range(self.num_envs)])
         
-        result = np.array([cart_position, cart_velocity, pole_angle, pole_angular_velocity], dtype=np.float32)
-        return result
+        return cart_position, cart_velocity, pole_angle, pole_angular_velocity
+
+    # return observation for external viewer
+    def observation(self, observation=None):
+        observation = observation if observation else torch.stack(self._get_observation_tuple(), dim=-1)
+        observation = observation if self.num_envs > 1 else observation.squeeze(0).numpy()
+        return observation
 
     def _get_info(self):
         return {}
 
     def _should_terminate(self, position, angle):
-        return (
-            position < -self.x_threshold
-            or position > self.x_threshold
-            or angle < -self.theta_threshold_radians
-            or angle > self.theta_threshold_radians
-        )
+        # vectorized
+        position_failed = torch.logical_or(position < -self.x_threshold, position > self.x_threshold)
+        angle_failed = torch.logical_or(angle < -self.theta_threshold_radians, angle > self.theta_threshold_radians)
+        
+        if self.num_envs == 1:
+            return position_failed or angle_failed
+        
+        return torch.logical_or(position_failed, angle_failed)
 
     def _step_simulation(self):
         self.scene.step()
@@ -120,6 +135,7 @@ class GenCartPoleEnv(gym.Env):
         self.current_steps_count += 1
         # self.scene.viewer.stop()
 
+    @torch.no_grad()
     def reset(self, seed=None, options=None):
         self._stop_recording()
 
@@ -127,55 +143,63 @@ class GenCartPoleEnv(gym.Env):
         self._seed = seed
         self._options = options
         self.current_steps_count = 0
-        self.done = False
+        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool)
 
         self.scene.reset(self._init_state)
-
-        # randomize initial condition
-        random_condition_gen = lambda : np.random.uniform(low=-0.05, high=0.05)
-        init_cart_position = random_condition_gen()
-        init_cart_velocity = random_condition_gen()
-        init_pole_pos = random_condition_gen()
-        init_pole_velocity = random_condition_gen()
         
         jnt_names = ['slider_to_cart', 'cart_to_pole']
         dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-        self.cartpole.set_dofs_position(np.array([init_cart_position, init_pole_pos]), dofs_idx)
-        self.cartpole.set_dofs_velocity(np.array([init_cart_velocity, init_pole_velocity]), dofs_idx)
+
+        # vectorized
+        random_positions = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
+        random_velocities = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
+        
+        self.cartpole.set_dofs_position(random_positions, dofs_idx)
+        self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)
 
         self.cam.start_recording()
 
-        return self._get_obs(), self._get_info()
+        return self.observation(), self._get_info()
 
+    @torch.no_grad()
     def step(self, action):
         # assert self.action_space.contains(action)
+
+        dofs_idx = [self.cartpole.get_joint('slider_to_cart').dof_idx_local]
+
+        # action is in between 0 and 1
+        velocity_inputs = action - 0.5
+        velocity_inputs = velocity_inputs * self.targetVelocity * 2
         
-        jnt_names = ['slider_to_cart', 'cart_to_pole']
-        dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-        self.cartpole.control_dofs_velocity(np.array([self.targetVelocity if action == 1 else -self.targetVelocity, 0]), dofs_idx)
+        if len(velocity_inputs.shape) == 0:
+            velocity_inputs = torch.tensor([velocity_inputs]).unsqueeze(0)
+            
+        self.cartpole.control_dofs_velocity(velocity_inputs, dofs_idx)
 
         self._step_simulation()
 
-        observation = self._get_obs()
+        observation = self._get_observation_tuple()
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
+
+        # vectorized
+        reward = torch.zeros(self.num_envs)
+        reward = torch.where(self.done, reward, torch.ones_like(reward))
+        self.done = self._should_terminate(cart_position, pole_angle)
         
-        reward = 0
-        if not self.done:
-            self.done = self._should_terminate(cart_position, pole_angle)
-            reward = 1.0
+        if self.num_envs == 1:
+            return self.observation(), reward[0].item(), self.done.item(), False, self._get_info()
 
         # observation, reward, done, truncated, info
-        return observation, reward, self.done, False, self._get_info()
+        return self.observation(), reward, self.done, False, self._get_info()
 
-    
-    def getPoleHeight(self):
-        pole_height = self.cartpole.get_link("pole").get_AABB()[1,2] \
-                        - self.cartpole.get_joint('cart_to_pole').get_pos()[2]
+    # def getPoleHeight(self):
+    #     pole_height = self.cartpole.get_link("pole").get_AABB()[1,2] \
+    #                     - self.cartpole.get_joint('cart_to_pole').get_pos()[2]
 
-        return pole_height
+    #     return pole_height
     
-    def getCartPosition(self):
-        return self.cartpole.get_link("cart").get_pos()[0]
+    # def getCartPosition(self):
+    #     return self.cartpole.get_link("cart").get_pos()[0]
     
     def render(self):
         if self.render_mode == "human":
@@ -186,12 +210,13 @@ class GenCartPoleEnv(gym.Env):
             # on Mac, it has to run in the main threads
             self.scene.viewer.start()
         elif self.render_mode == "ansi":
-            obs = self._get_obs()
+            obs = self._get_observation_tuple()
             print(f"Cart Position: {obs[0]}; Pole Angle: {obs[2]}")
     
     def close(self):
         self._stop_viewer()
         self._stop_recording()
+        gs.destroy()
     
     def _stop_recording(self):
         if self.cam._in_recording:
@@ -201,3 +226,11 @@ class GenCartPoleEnv(gym.Env):
         # self.scene._visualizer._viewer
         if self.scene.viewer and self.scene.viewer.is_alive():
             self.scene.viewer.stop()
+
+
+custom_environment_spec = gym.register(id='GenCartPole-v0', 
+                                        entry_point=GenCartPoleEnv,
+                                        reward_threshold=2000, 
+                                        max_episode_steps=2000,
+                                        vector_entry_point=GenCartPoleEnv,
+                                        )
