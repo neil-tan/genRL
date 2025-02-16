@@ -17,6 +17,7 @@ class GenCartPoleEnv(gym.Env):
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
+                 logging_level="info",
                  **kwargs,
                  ):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -44,7 +45,7 @@ class GenCartPoleEnv(gym.Env):
         
         
         ### simulator setup
-        gs.init(backend=gs.cpu, logging_level='warning')
+        gs.init(backend=gs.cpu, logging_level=logging_level)
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",
@@ -53,7 +54,7 @@ class GenCartPoleEnv(gym.Env):
                 camera_pos    = (0.0, 8, 0.5),
                 camera_lookat = (0.0, 0.0, 3),
                 camera_fov    = 60,
-                max_FPS       = 60,
+                max_FPS       = self.metadata["render_fps"],
             ),
             vis_options = gs.options.VisOptions(
                 show_world_frame = True,
@@ -220,7 +221,7 @@ class GenCartPoleEnv(gym.Env):
     
     def _stop_recording(self):
         if self.cam._in_recording:
-            self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+            self.cam.stop_recording(save_to_filename='video.mp4', fps=self.metadata["render_fps"])
     
     def _stop_viewer(self):
         # self.scene._visualizer._viewer

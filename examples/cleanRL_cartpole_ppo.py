@@ -5,10 +5,9 @@ from torch.distributions import Categorical
 from genRL.rl.ppo import PPO
 import genesis as gs
 import sys
-import time
 
 #Hyperparameters
-learning_rate = 0.01
+learning_rate = 0.003
 gamma         = 0.99
 lmbda         = 0.97
 eps_clip      = 0.1
@@ -42,23 +41,25 @@ def training_loop(env):
         if n_epi%print_interval==0 and n_epi!=0:
             print("# of episode :{}, avg score : {:.1f}".format(n_epi, score/print_interval))
             score = 0.0
-        
-    env.close()
+
 
 def main():
-    env = gym.make("GenCartPole-v0", render_mode="human", max_force=1000, targetVelocity=10)
-
+    env = gym.make("GenCartPole-v0",
+                   render_mode="human" if sys.platform == "darwin" else "ansi",
+                   max_force=1000,
+                   targetVelocity=10,
+                   loglevel="info", # "info", "warning", "error", "debug"
+                   )
+    
+    env.reset()
+    
     if not sys.platform == "linux":
         gs.tools.run_in_another_thread(fn=training_loop, args=(env,))
     else:
-        training_loop(env, 300)
+        training_loop(env)
 
-    time.sleep(1)
-    while True:
-        env.render()
-        # if env.unwrapped.done == True:
-        #     break
-        # time.sleep(1)
+    env.render()
+    env.close()
     
 
 if __name__ == '__main__':
