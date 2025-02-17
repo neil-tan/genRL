@@ -7,15 +7,20 @@ import genesis as gs
 import sys
 
 #Hyperparameters
-learning_rate = 0.01
+learning_rate = 0.005
 gamma         = 0.99
-lmbda         = 0.97
+lmbda         = 0.95
 eps_clip      = 0.1
 T_horizon     = 1000
 
 
 def training_loop(env):
-    model = PPO()
+    model = PPO(device="cuda",
+                learning_rate=learning_rate,
+                gamma=gamma,
+                lmbda=lmbda,
+                eps_clip=eps_clip,
+                )
     score = 0.0
     print_interval = 20
 
@@ -41,18 +46,18 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, float(score/print_interval)))
+            print("# of episode :{}, avg score : {:.1f}".format(n_epi, float(score.mean()/print_interval)))
             score = 0.0
 
 
 def main():
     env = gym.make("GenCartPole-v0",
                    render_mode="human" if sys.platform == "darwin" else "ansi",
-                   num_envs=5,
+                   num_envs=16,
                    max_force=1000,
                    targetVelocity=10,
                    logging_level="warning", # "info", "warning", "error", "debug"
-                   gs_backend=gs.cpu
+                   gs_backend=gs.gpu
                    )
     
     env.reset()

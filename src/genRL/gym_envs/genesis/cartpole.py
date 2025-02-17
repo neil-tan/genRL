@@ -32,7 +32,7 @@ class GenCartPoleEnv(gym.Env):
         self.step_scaler = step_scaler
         self.current_steps_count = 0
 
-        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool)
+        self.done = torch.zeros((self.num_envs,), dtype=torch.bool)
 
         # [Cart Position, Cart Velocity, Pole Angle (rad), Pole Velocity]
         self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
@@ -193,9 +193,9 @@ class GenCartPoleEnv(gym.Env):
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
 
         # vectorized
+        self.done = self._should_terminate(cart_position, pole_angle)
         reward = torch.zeros(self.num_envs, device=self.done.device)
         reward = torch.where(self.done, reward, torch.ones_like(reward))
-        self.done = self._should_terminate(cart_position, pole_angle)
         
         if self.num_envs == 1:
             return self.observation(), reward[0].item(), self.done.item(), False, self._get_info()

@@ -5,18 +5,25 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
-#Hyperparameters
-learning_rate = 0.0005
-gamma         = 0.98
-lmbda         = 0.95
-eps_clip      = 0.1
-K_epoch       = 3
-T_horizon     = 20
+T_horizon     = 20,
 
 class PPO(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                 learning_rate = 0.0005,
+                 gamma         = 0.98,
+                 lmbda         = 0.95,
+                 eps_clip      = 0.1,
+                 K_epoch       = 3,
+                 device = torch.cpu):
         super(PPO, self).__init__()
         self.data = []
+        
+        self.learning_rate = learning_rate
+        self.gamma = gamma
+        self.lmbda = lmbda
+        self.eps_clip = eps_clip
+        self.K_epoch = K_epoch
+        self.device = "cpu"
         
         self.fc1   = nn.Linear(4,256)
         self.fc_pi = nn.Linear(256,2)
@@ -51,17 +58,20 @@ class PPO(nn.Module):
             done_mask = torch.where(torch.tensor(done), torch.tensor(0.0), torch.tensor(1.0))
             done_lst.append(done_mask)
             
-        s,a,r,s_prime,done_mask, prob_a = torch.tensor(s_lst, dtype=torch.float).permute((1,0,2)), torch.stack(a_lst, dim=-1), \
-                                          torch.stack(r_lst, dim=-1), torch.tensor(s_prime_lst, dtype=torch.float).permute((1,0,2)), \
-                                          torch.stack(done_lst, dim=-1), torch.stack(prob_a_lst, dim=-1)
+        s,a,r,s_prime,done_mask, prob_a = torch.tensor(s_lst, dtype=torch.float, device=self.device).permute((1,0,2)), \
+                                          torch.stack(a_lst, dim=-1).to(self.device), \
+                                          torch.stack(r_lst, dim=-1).to(self.device), \
+                                          torch.tensor(s_prime_lst, dtype=torch.float).permute((1,0,2)).to(self.device), \
+                                          torch.stack(done_lst, dim=-1).to(self.device), \
+                                          torch.stack(prob_a_lst, dim=-1).to(self.device)
         self.data = []
         return s, a, r, s_prime, done_mask, prob_a
         
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
 
-        for i in range(K_epoch):
-            td_target = r + gamma * self.v(s_prime).squeeze(-1)
+        for i in range(self.K_epoch):
+            td_target = r + self.gamma * self.v(s_prime).squeeze(-1)
             delta = td_target - self.v(s).squeeze(-1)
             delta = delta.masked_fill(~done_mask.bool(), 0.0)
             delta = delta.detach().numpy()
@@ -69,7 +79,7 @@ class PPO(nn.Module):
             advantage_lst = []
             advantage = 0.0
             for delta_t in delta[::-1]:
-                advantage = gamma * lmbda * advantage + delta_t[0]
+                advantage = self.gamma * self.lmbda * advantage + delta_t[0]
                 advantage_lst.append([advantage])
             advantage_lst.reverse()
             advantage = torch.tensor(advantage_lst, dtype=torch.float)
@@ -79,7 +89,7 @@ class PPO(nn.Module):
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantage
-            surr2 = torch.clamp(ratio, 1-eps_clip, 1+eps_clip) * advantage
+            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantage
             loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s).squeeze(-1) , td_target.detach())
 
             self.optimizer.zero_grad()
