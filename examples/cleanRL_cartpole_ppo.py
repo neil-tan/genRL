@@ -26,10 +26,12 @@ def training_loop(env):
             for t in range(T_horizon):
                 prob = model.pi(torch.from_numpy(s).float())
                 m = Categorical(prob)
-                a = m.sample().item()
+                a = m.sample()
                 s_prime, r, done, truncated, info = env.step(a)
+                done = torch.all(done) if isinstance(done, torch.Tensor) else done
 
-                model.put_data((s, a, r/100.0, s_prime, prob[a].item(), done))
+                prob_a = torch.gather(prob, -1, a.unsqueeze(0)).squeeze(0)
+                model.put_data((s, a, r/100.0, s_prime, prob_a, done))
                 s = s_prime
 
                 score += r
@@ -46,6 +48,7 @@ def training_loop(env):
 def main():
     env = gym.make("GenCartPole-v0",
                    render_mode="human" if sys.platform == "darwin" else "ansi",
+                   num_envs=5,
                    max_force=1000,
                    targetVelocity=10,
                    logging_level="warning", # "info", "warning", "error", "debug"

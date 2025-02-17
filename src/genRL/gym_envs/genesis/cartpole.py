@@ -117,7 +117,8 @@ class GenCartPoleEnv(gym.Env):
     # return observation for external viewer
     def observation(self, observation=None):
         observation = observation if observation else torch.stack(self._get_observation_tuple(), dim=-1)
-        observation = observation if self.num_envs > 1 else observation.squeeze(0).cpu().numpy()
+        observation = observation if self.num_envs > 1 else observation.squeeze(0)
+        observation = observation.cpu().numpy()
         return observation
 
     def _get_info(self):
@@ -147,7 +148,7 @@ class GenCartPoleEnv(gym.Env):
         self._seed = seed
         self._options = options
         self.current_steps_count = 0
-        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool)
+        self.done = torch.zeros((self.num_envs), dtype=torch.bool)
 
         self.scene.reset(self._init_state)
         
@@ -178,7 +179,13 @@ class GenCartPoleEnv(gym.Env):
         if len(getattr(velocity_inputs, "shape", [])) == 0:
             velocity_inputs = torch.tensor([velocity_inputs]).unsqueeze(0)
             
-        self.cartpole.control_dofs_velocity(velocity_inputs, dofs_idx)
+        # self.cartpole.control_dofs_velocity(velocity_inputs, dofs_idx)
+        # self.cartpole.control_dofs_velocity(velocity_inputs,
+        #                                     dofs_idx * self.num_envs,
+        #                                     [i for i in range(self.num_envs)])
+        self.cartpole.control_dofs_velocity(velocity_inputs.unsqueeze(-1),
+                                            dofs_idx,
+                                            [i for i in range(self.num_envs)])
 
         self._step_simulation()
 
