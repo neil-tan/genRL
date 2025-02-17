@@ -1,4 +1,4 @@
-import genRL.gym_envs.genesis.cartpole as gen_cartpole
+import genRL.gym_envs.genesis.cartpole
 import gymnasium as gym
 import torch
 from torch.distributions import Categorical

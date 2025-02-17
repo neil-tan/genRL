@@ -4,7 +4,6 @@ import genesis as gs
 import sys
 import gymnasium as gym
 from gymnasium import spaces
-from transforms3d import euler
 import torch
 
 # %%
@@ -106,8 +105,11 @@ class GenCartPoleEnv(gym.Env):
         cart_position = cartpole.get_link("cart").get_pos()[:,0]
         cart_velocity = cartpole.get_link("cart").get_vel()[:,0]
         pole_angular_velocity = cartpole.get_link("pole").get_ang()[:,1]
-        pole_quant = cartpole.get_link("pole").get_quat()
-        pole_angle = torch.tensor([euler.quat2euler(pole_quant[i], axes='sxyz')[1] for i in range(self.num_envs)])
+
+        # see https://github.com/Genesis-Embodied-AI/Genesis/issues/733#issuecomment-2661089322
+        pole_angle = cartpole.get_dofs_position([cartpole.get_joint('cart_to_pole').dof_idx_local]).squeeze(-1)
+        # pole_quant = cartpole.get_link("pole").get_quat()
+        # pole_angle = torch.tensor([euler.quat2euler(pole_quant[i], axes='sxyz')[1] for i in range(self.num_envs)])
         
         return cart_position, cart_velocity, pole_angle, pole_angular_velocity
 
