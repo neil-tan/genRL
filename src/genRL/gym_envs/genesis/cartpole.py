@@ -17,6 +17,7 @@ class GenCartPoleEnv(gym.Env):
                  max_force=100,
                  step_scaler:int=1,
                  logging_level="info",
+                 gs_backend = gs.cpu,
                  **kwargs,
                  ):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -44,7 +45,7 @@ class GenCartPoleEnv(gym.Env):
         
         
         ### simulator setup
-        gs.init(backend=gs.cpu, logging_level=logging_level)
+        gs.init(backend=gs_backend, logging_level=logging_level)
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",
@@ -116,7 +117,7 @@ class GenCartPoleEnv(gym.Env):
     # return observation for external viewer
     def observation(self, observation=None):
         observation = observation if observation else torch.stack(self._get_observation_tuple(), dim=-1)
-        observation = observation if self.num_envs > 1 else observation.squeeze(0).numpy()
+        observation = observation if self.num_envs > 1 else observation.squeeze(0).cpu().numpy()
         return observation
 
     def _get_info(self):
@@ -185,7 +186,7 @@ class GenCartPoleEnv(gym.Env):
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
 
         # vectorized
-        reward = torch.zeros(self.num_envs)
+        reward = torch.zeros(self.num_envs, device=self.done.device)
         reward = torch.where(self.done, reward, torch.ones_like(reward))
         self.done = self._should_terminate(cart_position, pole_angle)
         

@@ -48,7 +48,8 @@ def main():
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                   loglevel="info", # "info", "warning", "error", "debug"
+                   logging_level="info", # "info", "warning", "error", "debug"
+                   gs_backend=gs.cpu
                    )
     
     env.reset()
