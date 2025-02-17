@@ -7,7 +7,7 @@ import genesis as gs
 import sys
 
 #Hyperparameters
-learning_rate = 0.003
+learning_rate = 0.01
 gamma         = 0.99
 lmbda         = 0.97
 eps_clip      = 0.1
@@ -48,7 +48,7 @@ def main():
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                   logging_level="info", # "info", "warning", "error", "debug"
+                   logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.cpu
                    )
     
