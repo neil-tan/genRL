@@ -98,6 +98,7 @@ def run_sim(scene, cartpole, cam):
             pole_angle = euler.quat2euler(cartpole.get_link("pole").get_quat(), axes='sxyz')
             pole_position_l = cartpole.get_link("pole").get_pos()
             # pole_angle_j = cartpole.get_joint('cart_to_pole').get_quat() # always [1, 0, 0, 0]
+            # pole_angle_j = cartpole.get_joint('cart_to_pole').get_pos()
             
             pole_height = cartpole.links[dofs_idx[1]].get_AABB()
             pole_height_l = cartpole.get_link("pole").get_AABB()[1,2] - cartpole.get_joint('cart_to_pole').get_pos()[2]

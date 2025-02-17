@@ -4,7 +4,6 @@ import genesis as gs
 import sys
 import gymnasium as gym
 from gymnasium import spaces
-from transforms3d import euler
 import torch
 
 # %%
@@ -17,6 +16,8 @@ class GenCartPoleEnv(gym.Env):
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
+                 logging_level="info",
+                 gs_backend = gs.cpu,
                  **kwargs,
                  ):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -44,7 +45,7 @@ class GenCartPoleEnv(gym.Env):
         
         
         ### simulator setup
-        gs.init(backend=gs.cpu)
+        gs.init(backend=gs_backend, logging_level=logging_level)
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",
@@ -53,7 +54,7 @@ class GenCartPoleEnv(gym.Env):
                 camera_pos    = (0.0, 8, 0.5),
                 camera_lookat = (0.0, 0.0, 3),
                 camera_fov    = 60,
-                max_FPS       = 60,
+                max_FPS       = self.metadata["render_fps"],
             ),
             vis_options = gs.options.VisOptions(
                 show_world_frame = True,
@@ -105,15 +106,18 @@ class GenCartPoleEnv(gym.Env):
         cart_position = cartpole.get_link("cart").get_pos()[:,0]
         cart_velocity = cartpole.get_link("cart").get_vel()[:,0]
         pole_angular_velocity = cartpole.get_link("pole").get_ang()[:,1]
-        pole_quant = cartpole.get_link("pole").get_quat()
-        pole_angle = torch.tensor([euler.quat2euler(pole_quant[i], axes='sxyz')[1] for i in range(self.num_envs)])
+
+        # see https://github.com/Genesis-Embodied-AI/Genesis/issues/733#issuecomment-2661089322
+        pole_angle = cartpole.get_dofs_position([cartpole.get_joint('cart_to_pole').dof_idx_local]).squeeze(-1)
+        # pole_quant = cartpole.get_link("pole").get_quat()
+        # pole_angle = torch.tensor([euler.quat2euler(pole_quant[i], axes='sxyz')[1] for i in range(self.num_envs)])
         
         return cart_position, cart_velocity, pole_angle, pole_angular_velocity
 
     # return observation for external viewer
     def observation(self, observation=None):
         observation = observation if observation else torch.stack(self._get_observation_tuple(), dim=-1)
-        observation = observation if self.num_envs > 1 else observation.squeeze(0).numpy()
+        observation = observation if self.num_envs > 1 else observation.squeeze(0).cpu().numpy()
         return observation
 
     def _get_info(self):
@@ -182,7 +186,7 @@ class GenCartPoleEnv(gym.Env):
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
 
         # vectorized
-        reward = torch.zeros(self.num_envs)
+        reward = torch.zeros(self.num_envs, device=self.done.device)
         reward = torch.where(self.done, reward, torch.ones_like(reward))
         self.done = self._should_terminate(cart_position, pole_angle)
         
@@ -220,7 +224,7 @@ class GenCartPoleEnv(gym.Env):
     
     def _stop_recording(self):
         if self.cam._in_recording:
-            self.cam.stop_recording(save_to_filename='video.mp4', fps=60)
+            self.cam.stop_recording(save_to_filename='video.mp4', fps=self.metadata["render_fps"])
     
     def _stop_viewer(self):
         # self.scene._visualizer._viewer
