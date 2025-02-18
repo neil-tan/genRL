@@ -12,7 +12,7 @@ gamma         = 0.99
 lmbda         = 0.95
 eps_clip      = 0.1
 T_horizon     = 1000
-num_envs = 32
+num_envs = 8
 
 
 def training_loop(env):
@@ -31,10 +31,15 @@ def training_loop(env):
         while not done:
             for t in range(T_horizon):
                 prob = model.pi(torch.from_numpy(s).float())
+                
+                if torch.isnan(prob).sum() > 0:
+                    print("Nan detected in prob")
+
                 prob = torch.clamp(prob, 1e-10, 1.0)  # Ensure probabilities are within valid range
                 prob = prob / prob.sum(dim=-1, keepdim=True)  # Normalize to ensure they sum to 1
                 m = Categorical(prob)
                 a = m.sample()
+                
                 s_prime, r, done, truncated, info = env.step(a)
 
                 prob_a = torch.gather(prob, -1, a.unsqueeze(0)).squeeze(0)
@@ -50,7 +55,8 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, float(score.mean()/print_interval)))
+            score = score.mean() if isinstance(score, torch.Tensor) else score
+            print("# of episode :{}, avg score : {:.1f}".format(n_epi, score/print_interval))
             score = 0.0
 
 

@@ -4,8 +4,43 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from typing import Optional
 
 T_horizon     = 20,
+
+def masked_mean(values: torch.Tensor, mask: torch.Tensor, axis: Optional[bool] = None) -> torch.Tensor:
+    """Compute mean of tensor with a masked values."""
+    if axis is not None:
+        return (values * mask).sum(axis=axis) / mask.sum(axis=axis)
+    else:
+        return (values * mask).sum() / mask.sum()
+
+
+def masked_var(values: torch.Tensor, mask: torch.Tensor, unbiased: bool = True) -> torch.Tensor:
+    """Compute variance of tensor with masked values."""
+    mean = masked_mean(values, mask)
+    centered_values = values - mean
+    variance = masked_mean(centered_values**2, mask)
+    if unbiased:
+        mask_sum = mask.sum()
+        if mask_sum == 0:
+            raise ValueError(
+                "The sum of the mask is zero, which can happen when `mini_batch_size=1`;"
+                "try increase the `mini_batch_size` or `gradient_accumulation_steps`"
+            )
+        # note that if mask_sum == 1, then there is a division by zero issue
+        # to avoid it you just need to use a larger minibatch_size
+        bessel_correction = mask_sum / (mask_sum - 1)
+        variance = variance * bessel_correction
+    return variance
+
+def masked_whiten(values: torch.Tensor, mask: torch.Tensor, shift_mean: bool = True) -> torch.Tensor:
+    """Whiten values with masked values."""
+    mean, var = masked_mean(values, mask), masked_var(values, mask)
+    whitened = (values - mean) * torch.rsqrt(var + 1e-8)
+    if not shift_mean:
+        whitened += mean
+    return whitened
 
 class PPO(nn.Module):
     def __init__(self,
@@ -52,23 +87,42 @@ class PPO(nn.Module):
             
             s_lst.append(s)
             a_lst.append(a)
-            r_lst.append(r)
+            r_lst.append(r if isinstance(r, torch.Tensor) else torch.tensor(r, dtype=torch.float))
             s_prime_lst.append(s_prime)
             prob_a_lst.append(prob_a)
             done_mask = torch.where(torch.tensor(done), torch.tensor(0.0), torch.tensor(1.0))
             done_lst.append(done_mask)
             
-        s,a,r,s_prime,done_mask, prob_a = torch.tensor(s_lst, dtype=torch.float, device=self.device).permute((1,0,2)), \
+        s,a,r,s_prime,done_mask, prob_a = torch.tensor(s_lst, dtype=torch.float), \
                                           torch.stack(a_lst, dim=-1).to(self.device), \
                                           torch.stack(r_lst, dim=-1).to(self.device), \
-                                          torch.tensor(s_prime_lst, dtype=torch.float).permute((1,0,2)).to(self.device), \
+                                          torch.tensor(s_prime_lst, dtype=torch.float, device=self.device), \
                                           torch.stack(done_lst, dim=-1).to(self.device), \
                                           torch.stack(prob_a_lst, dim=-1).to(self.device)
+
+        if s.dim() > 2:
+            s = s.permute((1,0,2))
+            s_prime = s_prime.permute((1,0,2))
+            
+        done_mask = self._rshift_done_mask(done_mask)
+
         self.data = [] 
         return s, a, r, s_prime, done_mask, prob_a
+    
+    def _rshift_done_mask(self, done):
+        done_mask = torch.ones_like(done)
+        if done.dim() == 1:
+            done_mask[:-1] = done[1:]
+        elif done.dim() == 2:
+            done_mask[:,:-1] = done[:,1:]
+        else:
+            raise ValueError("Invalid done shape")
+        return done_mask
         
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
+        
+        
 
         for i in range(self.K_epoch):
             td_target = r + self.gamma * self.v(s_prime).squeeze(-1)
@@ -76,13 +130,16 @@ class PPO(nn.Module):
             delta = delta.masked_fill(~done_mask.bool(), 0.0).detach()
             # delta = delta.detach().numpy()
 
-
-            advantage = torch.zeros_like(r)
+            advantage = []
             advantage_slice = 0.0
             for t in reversed(range(delta.shape[-1])): # reverse iterate
-                delta_t = delta[:,t]
+                # delta_t = delta[:,t]
+                t = torch.tensor(t)
+                delta_t = torch.index_select(delta, -1, t)
                 advantage_slice = self.gamma * self.lmbda * advantage_slice + delta_t
-                advantage[:,t] = advantage_slice
+                advantage.append(advantage_slice)
+            
+            advantage = torch.stack(advantage, dim=-1).squeeze(-1)
 
             # advantage_lst = []
             # advantage = 0.0
@@ -91,6 +148,8 @@ class PPO(nn.Module):
             #     advantage_lst.append([advantage])
             # advantage_lst.reverse()
             # advantage = torch.tensor(advantage_lst, dtype=torch.float)
+
+            # advantage = masked_whiten(advantage, done_mask, shift_mean=False)
             advantage = advantage.masked_fill(~done_mask.bool(), 0.0)
 
             pi = self.pi(s, softmax_dim=1)
