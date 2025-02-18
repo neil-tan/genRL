@@ -64,7 +64,7 @@ class PPO(nn.Module):
                                           torch.tensor(s_prime_lst, dtype=torch.float).permute((1,0,2)).to(self.device), \
                                           torch.stack(done_lst, dim=-1).to(self.device), \
                                           torch.stack(prob_a_lst, dim=-1).to(self.device)
-        self.data = []
+        self.data = [] 
         return s, a, r, s_prime, done_mask, prob_a
         
     def train_net(self):
@@ -73,20 +73,30 @@ class PPO(nn.Module):
         for i in range(self.K_epoch):
             td_target = r + self.gamma * self.v(s_prime).squeeze(-1)
             delta = td_target - self.v(s).squeeze(-1)
-            delta = delta.masked_fill(~done_mask.bool(), 0.0)
-            delta = delta.detach().numpy()
+            delta = delta.masked_fill(~done_mask.bool(), 0.0).detach()
+            # delta = delta.detach().numpy()
 
-            advantage_lst = []
-            advantage = 0.0
-            for delta_t in delta[::-1]:
-                advantage = self.gamma * self.lmbda * advantage + delta_t[0]
-                advantage_lst.append([advantage])
-            advantage_lst.reverse()
-            advantage = torch.tensor(advantage_lst, dtype=torch.float)
+
+            advantage = torch.zeros_like(r)
+            advantage_slice = 0.0
+            for t in reversed(range(delta.shape[-1])): # reverse iterate
+                delta_t = delta[:,t]
+                advantage_slice = self.gamma * self.lmbda * advantage_slice + delta_t
+                advantage[:,t] = advantage_slice
+
+            # advantage_lst = []
+            # advantage = 0.0
+            # for delta_t in delta[::-1]:
+            #     advantage = self.gamma * self.lmbda * advantage + delta_t[0]
+            #     advantage_lst.append([advantage])
+            # advantage_lst.reverse()
+            # advantage = torch.tensor(advantage_lst, dtype=torch.float)
+            advantage = advantage.masked_fill(~done_mask.bool(), 0.0)
 
             pi = self.pi(s, softmax_dim=1)
             pi_a = pi.gather(-1,a.unsqueeze(-1)).squeeze(-1)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
+            ratio = ratio.masked_fill(~done_mask.bool(), 1)
 
             surr1 = ratio * advantage
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantage

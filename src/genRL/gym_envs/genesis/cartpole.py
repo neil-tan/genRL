@@ -112,6 +112,12 @@ class GenCartPoleEnv(gym.Env):
         # pole_quant = cartpole.get_link("pole").get_quat()
         # pole_angle = torch.tensor([euler.quat2euler(pole_quant[i], axes='sxyz')[1] for i in range(self.num_envs)])
         
+        # done = self._should_terminate(cart_position, pole_angle)
+        # cart_position = torch.where(done, torch.zeros_like(cart_position), cart_position)
+        # cart_velocity = torch.where(done, torch.zeros_like(cart_velocity), cart_velocity)
+        # pole_angle = torch.where(done, torch.zeros_like(pole_angle), pole_angle)
+        # pole_angular_velocity = torch.where(done, torch.zeros_like(pole_angular_velocity), pole_angular_velocity)
+        
         return cart_position, cart_velocity, pole_angle, pole_angular_velocity
 
     # return observation for external viewer
