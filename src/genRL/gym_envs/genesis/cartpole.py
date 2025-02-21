@@ -18,6 +18,7 @@ class GenCartPoleEnv(gym.Env):
                  step_scaler:int=1,
                  logging_level="info",
                  gs_backend = gs.cpu,
+                 seed=None,
                  **kwargs,
                  ):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -45,7 +46,9 @@ class GenCartPoleEnv(gym.Env):
         
         
         ### simulator setup
-        gs.init(backend=gs_backend, logging_level=logging_level)
+        gs.init(backend=gs_backend,
+                seed=seed,
+                logging_level=logging_level)
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",
@@ -183,13 +186,17 @@ class GenCartPoleEnv(gym.Env):
         velocity_inputs = velocity_inputs * self.targetVelocity * 2
         
         if len(getattr(velocity_inputs, "shape", [])) == 0:
-            velocity_inputs = torch.tensor(velocity_inputs).unsqueeze(0)
+            velocity_inputs = torch.tensor([velocity_inputs]).unsqueeze(0)
+        elif len(velocity_inputs.shape) == 1:
+            velocity_inputs = velocity_inputs.unsqueeze(-1)
             
         # self.cartpole.control_dofs_velocity(velocity_inputs, dofs_idx)
         # self.cartpole.control_dofs_velocity(velocity_inputs,
         #                                     dofs_idx * self.num_envs,
         #                                     [i for i in range(self.num_envs)])
-        self.cartpole.control_dofs_velocity(velocity_inputs.unsqueeze(-1),
+        
+        # self.cartpole.control_dofs_velocity(velocity_inputs.unsqueeze(-1),
+        self.cartpole.control_dofs_velocity(velocity_inputs,
                                             dofs_idx,
                                             [i for i in range(self.num_envs)])
 

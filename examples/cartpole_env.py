@@ -9,10 +9,16 @@ import time
 
 # %%
 # set random seed
-np.random.seed(98765)
-torch.manual_seed(98765)
+random_seed = 42
+np.random.seed(random_seed)
+torch.manual_seed(random_seed)
+
 # %%
-env = gym.make("GenCartPole-v0", render_mode="human", max_force=1000, targetVelocity=5)
+env = gym.make("GenCartPole-v0",
+               render_mode="human",
+               max_force=1000,
+               targetVelocity=5,
+               seed=random_seed)
 
 # %%
 def training_loop(env, max_steps=300):

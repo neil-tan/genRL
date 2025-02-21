@@ -5,6 +5,7 @@ from torch.distributions import Categorical
 from genRL.rl.ppo import PPO
 import genesis as gs
 import sys
+import numpy as np
 
 #Hyperparameters
 learning_rate = 0.01
@@ -12,8 +13,11 @@ gamma         = 0.99
 lmbda         = 0.95
 eps_clip      = 0.1
 T_horizon     = 1000
-num_envs = 8
+random_seed   = 42
+num_envs      = 8
 
+np.random.seed(random_seed)
+torch.manual_seed(random_seed)
 
 def training_loop(env):
     model = PPO(device="cuda",
@@ -67,7 +71,8 @@ def main():
                    max_force=1000,
                    targetVelocity=10,
                    logging_level="warning", # "info", "warning", "error", "debug"
-                   gs_backend=gs.gpu
+                   gs_backend=gs.cpu,
+                   seed=random_seed,
                    )
     
     env.reset()
