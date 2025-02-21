@@ -18,6 +18,7 @@ class GenCartPoleEnv(gym.Env):
                  step_scaler:int=1,
                  logging_level="info",
                  gs_backend = gs.cpu,
+                 seed=None,
                  **kwargs,
                  ):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -45,7 +46,9 @@ class GenCartPoleEnv(gym.Env):
         
         
         ### simulator setup
-        gs.init(backend=gs_backend, logging_level=logging_level)
+        gs.init(backend=gs_backend,
+                seed=seed,
+                logging_level=logging_level)
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",

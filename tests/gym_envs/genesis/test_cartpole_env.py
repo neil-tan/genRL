@@ -5,7 +5,11 @@ import gymnasium as gym
 import torch
 
 def test_env():
-    env = gym.make("GenCartPole-v0", render_mode="ansi", max_force=1000, targetVelocity=5)
+    env = gym.make("GenCartPole-v0",
+                   render_mode="ansi",
+                   max_force=1000,
+                   targetVelocity=5,
+                   seed=42)
     env.reset()
     action = env.action_space.sample()
     obs, reward, done, _, info = env.step(action)
@@ -16,7 +20,12 @@ def test_env():
     env.close()
 
 def test_vec_env_step():
-    env = gym.make_vec("GenCartPole-v0", num_envs=5, render_mode="ansi", max_force=1000, targetVelocity=5)
+    env = gym.make_vec("GenCartPole-v0",
+                       num_envs=5,
+                       render_mode="ansi",
+                       max_force=1000,
+                       targetVelocity=5,
+                       seed=42)
     env.reset()
     action = torch.tensor([env.action_space.sample()])
     batched_action = torch.stack([action for _ in range(5)])
