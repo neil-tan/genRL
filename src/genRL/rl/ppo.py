@@ -33,10 +33,12 @@ class PPO(nn.Module):
         x = F.relu(self.fc1(x))
         v = self.fc_v(x)
         return v
-      
+    
+    @torch.no_grad()
     def put_data(self, transition):
         self.data.append(transition)
-        
+    
+    @torch.no_grad()
     def make_batch(self):
         s_lst, a_lst, r_lst, s_prime_lst, prob_a_lst, done_lst = [], [], [], [], [], []
         for transition in self.data:
