@@ -47,7 +47,7 @@ def training_loop(env):
                 s_prime, r, done, truncated, info = env.step(a)
 
                 prob_a = torch.gather(prob, -1, a.unsqueeze(0)).squeeze(0)
-                model.put_data((s, a, r/100.0, s_prime, prob_a, done))
+                model.put_data((s, a.detach(), r/100.0, s_prime, prob_a.detach(), done))
                 s = s_prime
 
                 score += r
