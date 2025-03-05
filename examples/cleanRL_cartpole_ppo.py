@@ -15,7 +15,6 @@ eps_clip      = 0.1
 T_horizon     = 1000
 random_seed   = 42
 
-random_seed = 42
 np.random.seed(random_seed)
 torch.manual_seed(random_seed)
 
@@ -31,10 +30,15 @@ def training_loop(env):
             for t in range(T_horizon):
                 prob = model.pi(torch.from_numpy(s).float())
                 m = Categorical(prob)
-                a = m.sample().detach()
+                a = m.sample()
                 s_prime, r, done, truncated, info = env.step(a)
 
-                model.put_data((s, a, r/100.0, s_prime, prob[a].detach(), done))
+                model.put_data((s,
+                                a.detach(),
+                                r/100.0,
+                                s_prime,
+                                prob[a].detach(),
+                                done))
                 s = s_prime
 
                 score += r
