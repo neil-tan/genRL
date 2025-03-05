@@ -52,11 +52,14 @@ class PPO(nn.Module):
             done_mask = 0 if done else 1
             done_lst.append([done_mask])
             
-        s,a,r,s_prime,done_mask, prob_a = torch.tensor(s_lst, dtype=torch.float), torch.tensor(a_lst), \
-                                          torch.tensor(r_lst), torch.tensor(s_prime_lst, dtype=torch.float), \
-                                          torch.tensor(done_lst, dtype=torch.float), torch.tensor(prob_a_lst)
+        # s,a,r,s_prime,done_mask, prob_a
+        ret = torch.tensor(s_lst, dtype=torch.float), torch.tensor(a_lst), \
+              torch.tensor(r_lst), torch.tensor(s_prime_lst, dtype=torch.float), \
+              torch.tensor(done_lst, dtype=torch.float), torch.tensor(prob_a_lst)
+                                          
+        ret = tuple(x.detach() for x in ret)
         self.data = []
-        return s, a, r, s_prime, done_mask, prob_a
+        return ret
         
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
@@ -64,11 +67,11 @@ class PPO(nn.Module):
         for i in range(K_epoch):
             td_target = r + gamma * self.v(s_prime) * done_mask
             delta = td_target - self.v(s)
-            delta = delta.detach().numpy()
+            delta = delta.detach()
 
             advantage_lst = []
             advantage = 0.0
-            for delta_t in delta[::-1]:
+            for delta_t in torch.flip(delta, dims=[0]):
                 advantage = gamma * lmbda * advantage + delta_t[0]
                 advantage_lst.append([advantage])
             advantage_lst.reverse()

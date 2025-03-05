@@ -30,15 +30,10 @@ def training_loop(env):
             for t in range(T_horizon):
                 prob = model.pi(torch.from_numpy(s).float())
                 m = Categorical(prob)
-                a = m.sample()
+                a = m.sample().detach()
                 s_prime, r, done, truncated, info = env.step(a)
 
-                model.put_data((s,
-                                a.detach(),
-                                r/100.0,
-                                s_prime,
-                                prob[a].detach(),
-                                done))
+                model.put_data((s, a, r/100.0, s_prime, prob[a].detach(), done))
                 s = s_prime
 
                 score += r
