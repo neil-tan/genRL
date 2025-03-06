@@ -11,7 +11,7 @@ gamma         = 0.98
 lmbda         = 0.95
 eps_clip      = 0.1
 K_epoch       = 3
-T_horizon     = 20
+# T_horizon     = 20
 
 class PPO(nn.Module):
     def __init__(self):
@@ -75,7 +75,7 @@ class PPO(nn.Module):
             with torch.no_grad():
                 advantages = torch.zeros_like(delta)
                 last_gae = 0
-                for t in reversed(range(T_horizon)):
+                for t in reversed(range(delta.shape[-1])):
                     last_gae = delta[:, t] + gamma * lmbda * last_gae * done_mask[:, t]
                     advantages[:, t] = last_gae
                 advantages = advantages.detach()
@@ -89,7 +89,7 @@ class PPO(nn.Module):
             # advantage_lst.reverse()
             # advantage = torch.tensor(advantage_lst, dtype=torch.float)
 
-            pi = self.pi(s, softmax_dim=1)
+            pi = self.pi(s, softmax_dim=-1)
             pi_a = pi.gather(-1,a).squeeze(-1)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
