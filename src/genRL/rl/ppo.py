@@ -23,7 +23,7 @@ class PPO(nn.Module):
         self.fc_v  = nn.Linear(256,1)
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
-    def pi(self, x, softmax_dim = 0):
+    def pi(self, x, softmax_dim = -1):
         x = F.relu(self.fc1(x))
         x = self.fc_pi(x)
         prob = F.softmax(x, dim=softmax_dim)
