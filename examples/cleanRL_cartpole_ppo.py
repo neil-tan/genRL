@@ -14,6 +14,7 @@ lmbda         = 0.97
 eps_clip      = 0.1
 T_horizon     = 1000
 random_seed   = 42
+num_envs = 1
 
 np.random.seed(random_seed)
 torch.manual_seed(random_seed)
@@ -28,22 +29,23 @@ def training_loop(env):
         done = False
         while not done:
             for t in range(T_horizon):
-                prob = model.pi(torch.from_numpy(s).float())
+                prob = model.pi(s)
                 m = Categorical(prob)
-                a = m.sample().detach()
+                a = m.sample().unsqueeze(-1)
                 s_prime, r, done, truncated, info = env.step(a)
 
-                model.put_data((s, a, r/100.0, s_prime, prob[a].detach(), done))
+                prob_a = torch.gather(prob, -1, a)
+                model.put_data((s, a.detach(), r/100.0, s_prime, prob_a.detach(), done))
                 s = s_prime
 
                 score += r
-                if done:
+                if done.all():
                     break
 
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, score/print_interval))
+            print("# of episode :{}, avg score : {:.1f}".format(n_epi, (score.mean()/print_interval).item()))
             score = 0.0
 
 
@@ -52,6 +54,8 @@ def main():
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
+                   num_envs=num_envs,
+                   return_tensor=True,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.cpu,
                    seed=random_seed,
