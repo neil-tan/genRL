@@ -45,17 +45,17 @@ class PPO(nn.Module):
             s, a, r, s_prime, prob_a, done = transition
             
             s_lst.append(s)
-            a_lst.append([a])
+            a_lst.append(a)
             r_lst.append([r])
             s_prime_lst.append(s_prime)
             prob_a_lst.append([prob_a])
-            done_mask = 0 if done else 1
+            done_mask = 0 if done.all() else 1
             done_lst.append([done_mask])
             
         # s,a,r,s_prime,done_mask, prob_a
-        ret = torch.tensor(s_lst, dtype=torch.float), torch.tensor(a_lst), \
-              torch.tensor(r_lst), torch.tensor(s_prime_lst, dtype=torch.float), \
-              torch.tensor(done_lst, dtype=torch.float), torch.tensor(prob_a_lst)
+        ret = torch.stack(s_lst).transpose(0,1), torch.stack(a_lst).transpose(0,1), \
+              torch.tensor(r_lst).transpose(1,0), torch.stack(s_prime_lst).transpose(0,1), \
+              torch.tensor(done_lst).transpose(1,0), torch.tensor(prob_a_lst).transpose(1,0)
                                           
         ret = tuple(x.detach() for x in ret)
         self.data = []
@@ -65,8 +65,8 @@ class PPO(nn.Module):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
 
         for i in range(K_epoch):
-            td_target = r + gamma * self.v(s_prime) * done_mask
-            delta = td_target - self.v(s)
+            td_target = r + gamma * self.v(s_prime).squeeze(-1) * done_mask
+            delta = td_target - self.v(s).squeeze(-1)
             delta = delta.detach()
 
             advantage_lst = []
@@ -78,7 +78,7 @@ class PPO(nn.Module):
             advantage = torch.tensor(advantage_lst, dtype=torch.float)
 
             pi = self.pi(s, softmax_dim=1)
-            pi_a = pi.gather(1,a)
+            pi_a = pi.gather(-1,a.unsqueeze(-1)).squeeze(-1)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantage

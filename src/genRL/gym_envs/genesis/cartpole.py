@@ -13,6 +13,7 @@ class GenCartPoleEnv(gym.Env):
     def __init__(self,
                  render_mode=None,
                  num_envs=1,
+                 return_tensor=False,
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
@@ -24,6 +25,7 @@ class GenCartPoleEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.num_envs = num_envs
+        self.return_tensor = return_tensor
 
         self.x_threshold = 2.4
         self.theta_threshold_degrees = 12
@@ -120,7 +122,7 @@ class GenCartPoleEnv(gym.Env):
     # return observation for external viewer
     def observation(self, observation=None):
         observation = observation if observation else torch.stack(self._get_observation_tuple(), dim=-1)
-        observation = observation if self.num_envs > 1 else observation.squeeze(0).cpu().numpy()
+        observation = observation if self.num_envs > 1 or self.return_tensor else observation.squeeze(0).cpu().numpy()
         return observation
 
     def _get_info(self):
@@ -131,8 +133,8 @@ class GenCartPoleEnv(gym.Env):
         position_failed = torch.logical_or(position < -self.x_threshold, position > self.x_threshold)
         angle_failed = torch.logical_or(angle < -self.theta_threshold_radians, angle > self.theta_threshold_radians)
         
-        if self.num_envs == 1:
-            return position_failed or angle_failed
+        # if self.num_envs == 1 and not self.return_tensor:
+        #     return position_failed or angle_failed
         
         return torch.logical_or(position_failed, angle_failed)
 
@@ -169,6 +171,7 @@ class GenCartPoleEnv(gym.Env):
         return self.observation(), self._get_info()
 
     @torch.no_grad()
+    # action shape: (num_envs, action_dim)
     def step(self, action):
         # assert self.action_space.contains(action)
 
@@ -193,7 +196,7 @@ class GenCartPoleEnv(gym.Env):
         reward = torch.where(self.done, reward, torch.ones_like(reward))
         self.done = self._should_terminate(cart_position, pole_angle)
         
-        if self.num_envs == 1:
+        if self.num_envs == 1 and not self.return_tensor:
             return self.observation(), reward[0].item(), self.done.item(), False, self._get_info()
 
         # observation, reward, done, truncated, info
