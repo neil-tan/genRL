@@ -78,12 +78,12 @@ class PPO(nn.Module):
             advantage = torch.tensor(advantage_lst, dtype=torch.float)
 
             pi = self.pi(s, softmax_dim=1)
-            pi_a = pi.gather(-1,a.unsqueeze(-1)).squeeze(-1)
+            pi_a = pi.gather(-1,a).squeeze(-1)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantage
             surr2 = torch.clamp(ratio, 1-eps_clip, 1+eps_clip) * advantage
-            loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target.detach())
+            loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s).squeeze(-1) , td_target.detach())
 
             self.optimizer.zero_grad()
             loss.mean().backward()
