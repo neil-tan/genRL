@@ -197,7 +197,7 @@ class GenCartPoleEnv(gym.Env):
         self.done = self._should_terminate(cart_position, pole_angle)
         
         if self.num_envs == 1 and not self.return_tensor:
-            return self.observation(), reward[0].item(), self.done.item(), False, self._get_info()
+            return self.observation(), reward[0].item(), self.done.item(), self.done.item(), self._get_info()
 
         # observation, reward, done, truncated, info
         return self.observation(), reward, self.done, False, self._get_info()
