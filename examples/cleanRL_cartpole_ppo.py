@@ -14,7 +14,7 @@ lmbda         = 0.97
 eps_clip      = 0.1
 T_horizon     = 1000
 random_seed   = 42
-num_envs = 1
+num_envs = 8
 
 np.random.seed(random_seed)
 torch.manual_seed(random_seed)
