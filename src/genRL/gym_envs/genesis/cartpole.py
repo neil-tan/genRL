@@ -192,7 +192,7 @@ class GenCartPoleEnv(gym.Env):
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
 
         # vectorized
-        reward = torch.zeros(self.num_envs, device=self.done.device)
+        reward = torch.zeros((self.num_envs, 1), device=self.done.device)
         reward = torch.where(self.done, reward, torch.ones_like(reward))
         reward = reward.squeeze(-1)
         self.done = self._should_terminate(cart_position, pole_angle).unsqueeze(-1)

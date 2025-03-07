@@ -33,13 +33,14 @@ def training_loop(env):
                 m = Categorical(prob)
                 a = m.sample().unsqueeze(-1)
                 s_prime, r, done, truncated, info = env.step(a)
+                done = done.all() if isinstance(done, torch.Tensor) else done
 
                 prob_a = torch.gather(prob, -1, a)
                 model.put_data((s, a.detach(), r/100.0, s_prime, prob_a.detach(), done))
                 s = s_prime
 
                 score += r
-                if done.all():
+                if done:
                     break
 
             model.train_net()
