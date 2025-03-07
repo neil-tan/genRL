@@ -77,14 +77,18 @@ class PPO(nn.Module):
                 for t in reversed(range(delta.shape[-1])):
                     last_gae = delta[:, t] + gamma * lmbda * last_gae * done_mask[:, t]
                     advantages[:, t] = last_gae
+            
+            # for boardcasting
+            advantages = advantages.unsqueeze(-1)
+            td_target = td_target.unsqueeze(-1)
 
             pi = self.pi(s, softmax_dim=-1)
-            pi_a = pi.gather(-1,a).squeeze(-1)
+            pi_a = pi.gather(-1,a)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-eps_clip, 1+eps_clip) * advantages
-            loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s).squeeze(-1) , td_target)
+            loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
 
             self.optimizer.zero_grad()
             loss.mean().backward()
