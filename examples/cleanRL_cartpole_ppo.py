@@ -9,8 +9,8 @@ import numpy as np
 
 #Hyperparameters
 learning_rate = 0.01
-gamma         = 0.99
-lmbda         = 0.97
+gamma         = 0.98
+lmbda         = 0.95
 eps_clip      = 0.1
 T_horizon     = 1000
 random_seed   = 42
@@ -20,7 +20,7 @@ np.random.seed(random_seed)
 torch.manual_seed(random_seed)
 
 def training_loop(env):
-    model = PPO()
+    model = PPO(learning_rate=learning_rate, gamma=gamma, lmbda=lmbda, eps_clip=eps_clip)
     score = 0.0
     print_interval = 20
 

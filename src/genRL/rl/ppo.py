@@ -5,18 +5,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
-#Hyperparameters
-learning_rate = 0.0005
-gamma         = 0.98
-lmbda         = 0.95
-eps_clip      = 0.1
-K_epoch       = 3
-# T_horizon     = 20
-
 class PPO(nn.Module):
-    def __init__(self):
+    def __init__(self,
+                 learning_rate=0.0005,
+                 gamma=0.98,
+                 lmbda=0.95,
+                 eps_clip=0.1,
+                 K_epoch=3,):
         super(PPO, self).__init__()
         self.data = []
+        self.learning_rate = learning_rate
+        self.gamma = gamma
+        self.lmbda = lmbda
+        self.eps_clip = eps_clip
+        self.K_epoch = K_epoch
         
         self.fc1   = nn.Linear(4,256)
         self.fc_pi = nn.Linear(256,2)
@@ -64,18 +66,18 @@ class PPO(nn.Module):
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
 
-        for i in range(K_epoch):
+        for i in range(self.K_epoch):
             with torch.no_grad():
                 values = self.v(s).squeeze(-1)
                 values_prime = self.v(s_prime).squeeze(-1)
                 
-                td_target = r + gamma * values_prime * done_mask
+                td_target = r + self.gamma * values_prime * done_mask
                 delta = td_target - values
             
                 advantages = torch.zeros_like(delta)
                 last_gae = 0
                 for t in reversed(range(delta.shape[-1])):
-                    last_gae = delta[:, t] + gamma * lmbda * last_gae * done_mask[:, t]
+                    last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
                     advantages[:, t] = last_gae
             
             # for boardcasting
@@ -87,43 +89,12 @@ class PPO(nn.Module):
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1-eps_clip, 1+eps_clip) * advantages
+            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
             loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
 
             self.optimizer.zero_grad()
             loss.mean().backward()
             self.optimizer.step()
-        
-def main():
-    env = gym.make('CartPole-v1')
-    model = PPO()
-    score = 0.0
-    print_interval = 20
-
-    for n_epi in range(10000):
-        s, _ = env.reset()
-        done = False
-        while not done:
-            for t in range(T_horizon):
-                prob = model.pi(torch.from_numpy(s).float())
-                m = Categorical(prob)
-                a = m.sample().item()
-                s_prime, r, done, truncated, info = env.step(a)
-
-                model.put_data((s, a, r/100.0, s_prime, prob[a].item(), done))
-                s = s_prime
-
-                score += r
-                if done:
-                    break
-
-            model.train_net()
-
-        if n_epi%print_interval==0 and n_epi!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, score/print_interval))
-            score = 0.0
-
-    env.close()
-
-if __name__ == '__main__':
-    main()
+    
+    def get_normalize_advantages(self, advantages):
+        return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
