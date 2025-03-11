@@ -5,12 +5,37 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
+
+class SimpleMLP(nn.Module):
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 softmax_output,
+                 hidden_dim=128,
+                 activation=F.relu,
+                 ):
+        super(SimpleMLP, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.activation = activation
+        self.softmax_output = softmax_output
+        
+    def forward(self, x):
+        x = self.activation(self.fc1(x))
+        x = self.fc2(x)
+        if self.softmax_output:
+            return F.softmax(x, dim=-1)
+        return x
+
 class PPO(nn.Module):
     def __init__(self,
+                 pi,
+                 v,
                  learning_rate=0.0005,
                  gamma=0.98,
                  lmbda=0.95,
                  eps_clip=0.1,
+                 max_grad_norm=0.5,
                  normalize_advantage=True,
                  K_epoch=3,):
         super(PPO, self).__init__()
@@ -19,24 +44,13 @@ class PPO(nn.Module):
         self.gamma = gamma
         self.lmbda = lmbda
         self.eps_clip = eps_clip
+        self.max_grad_norm = max_grad_norm
         self.normalize_advantage = normalize_advantage
         self.K_epoch = K_epoch
         
-        self.fc1   = nn.Linear(4,256)
-        self.fc_pi = nn.Linear(256,2)
-        self.fc_v  = nn.Linear(256,1)
+        self.pi = pi
+        self.v = v
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
-
-    def pi(self, x, softmax_dim = -1):
-        x = F.relu(self.fc1(x))
-        x = self.fc_pi(x)
-        prob = F.softmax(x, dim=softmax_dim)
-        return prob
-    
-    def v(self, x):
-        x = F.relu(self.fc1(x))
-        v = self.fc_v(x)
-        return v
     
     @torch.no_grad()
     def put_data(self, transition):
@@ -88,7 +102,7 @@ class PPO(nn.Module):
                 advantages = advantages.unsqueeze(-1)
                 td_target = td_target.unsqueeze(-1)
 
-            pi = self.pi(s, softmax_dim=-1)
+            pi = self.pi(s)
             pi_a = pi.gather(-1,a)
             ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
 
@@ -98,6 +112,7 @@ class PPO(nn.Module):
 
             self.optimizer.zero_grad()
             loss.mean().backward()
+            torch.nn.utils.clip_grad_norm_(self.pi.parameters(), self.max_grad_norm)
             self.optimizer.step()
 
     def get_normalized_advantage(self, advantages):

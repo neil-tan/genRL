@@ -2,7 +2,7 @@ import genRL.gym_envs.genesis.cartpole
 import gymnasium as gym
 import torch
 from torch.distributions import Categorical
-from genRL.rl.ppo import PPO
+from genRL.rl.ppo import PPO, SimpleMLP
 import genesis as gs
 import sys
 import numpy as np
@@ -20,7 +20,9 @@ np.random.seed(random_seed)
 torch.manual_seed(random_seed)
 
 def training_loop(env):
-    model = PPO(learning_rate=learning_rate, gamma=gamma, lmbda=lmbda, eps_clip=eps_clip)
+    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
+    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
+    model = PPO(pi=pi, v=v, learning_rate=learning_rate, gamma=gamma, lmbda=lmbda, eps_clip=eps_clip)
     score = 0.0
     print_interval = 20
 
