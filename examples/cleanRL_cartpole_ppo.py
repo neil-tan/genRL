@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 #Hyperparameters
-learning_rate = 0.01
+learning_rate = 0.0005
 gamma         = 0.98
 lmbda         = 0.95
 eps_clip      = 0.1

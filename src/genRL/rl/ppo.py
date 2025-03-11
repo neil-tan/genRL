@@ -11,6 +11,7 @@ class PPO(nn.Module):
                  gamma=0.98,
                  lmbda=0.95,
                  eps_clip=0.1,
+                 normalize_advantage=True,
                  K_epoch=3,):
         super(PPO, self).__init__()
         self.data = []
@@ -18,6 +19,7 @@ class PPO(nn.Module):
         self.gamma = gamma
         self.lmbda = lmbda
         self.eps_clip = eps_clip
+        self.normalize_advantage = normalize_advantage
         self.K_epoch = K_epoch
         
         self.fc1   = nn.Linear(4,256)
@@ -80,9 +82,11 @@ class PPO(nn.Module):
                     last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
                     advantages[:, t] = last_gae
             
-            # for boardcasting
-            advantages = advantages.unsqueeze(-1)
-            td_target = td_target.unsqueeze(-1)
+                advantages = self.get_normalized_advantage(advantages)
+
+                # for boardcasting
+                advantages = advantages.unsqueeze(-1)
+                td_target = td_target.unsqueeze(-1)
 
             pi = self.pi(s, softmax_dim=-1)
             pi_a = pi.gather(-1,a)
@@ -95,6 +99,8 @@ class PPO(nn.Module):
             self.optimizer.zero_grad()
             loss.mean().backward()
             self.optimizer.step()
-    
-    def get_normalize_advantages(self, advantages):
-        return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+    def get_normalized_advantage(self, advantages):
+        if self.normalize_advantage and advantages.shape[0] > 1:
+            return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        return advantages
