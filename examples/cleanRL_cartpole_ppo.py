@@ -8,13 +8,13 @@ import sys
 import numpy as np
 
 #Hyperparameters
-learning_rate = 0.0005
+learning_rate = 0.005
 gamma         = 0.98
 lmbda         = 0.95
 eps_clip      = 0.1
 T_horizon     = 1000
 random_seed   = 42
-num_envs = 1
+num_envs = 16
 
 np.random.seed(random_seed)
 torch.manual_seed(random_seed)

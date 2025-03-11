@@ -94,7 +94,7 @@ class PPO(nn.Module):
                 last_gae = 0
                 for t in reversed(range(delta.shape[-1])):
                     last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
-                    advantages[:, t] = last_gae
+                    advantages[:, t] = last_gae # FIXME: done_mask is not used here
             
                 advantages = self.get_normalized_advantage(advantages)
 
@@ -108,7 +108,9 @@ class PPO(nn.Module):
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
+
             loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
+            loss = loss.squeeze(-1) * done_mask
 
             self.optimizer.zero_grad()
             loss.mean().backward()
@@ -116,6 +118,7 @@ class PPO(nn.Module):
             self.optimizer.step()
 
     def get_normalized_advantage(self, advantages):
+        # FIXME: need to consider how done mask affects the mean and std
         if self.normalize_advantage and advantages.shape[0] > 1:
             return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
         return advantages
