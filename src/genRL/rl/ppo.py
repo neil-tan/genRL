@@ -77,7 +77,8 @@ class PPO(nn.Module):
         ret = tuple(x.detach() for x in ret)
         self.data = []
         return ret
-        
+    
+    @torch.compile
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
 
