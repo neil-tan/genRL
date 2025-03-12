@@ -17,6 +17,7 @@ class GenCartPoleEnv(gym.Env):
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
+                 record_video = False,
                  logging_level="info",
                  gs_backend = gs.cpu,
                  seed=None,
@@ -26,6 +27,7 @@ class GenCartPoleEnv(gym.Env):
         self.render_mode = render_mode
         self.num_envs = num_envs
         self.return_tensor = return_tensor
+        self.record_video = record_video
 
         self.x_threshold = 2.4
         self.theta_threshold_degrees = 12
@@ -166,7 +168,8 @@ class GenCartPoleEnv(gym.Env):
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)
 
-        self.cam.start_recording()
+        if self.record_video:
+            self.cam.start_recording()
 
         return self.observation(), self._get_info()
 

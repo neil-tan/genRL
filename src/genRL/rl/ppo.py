@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
+from genRL.utils import masked_mean, masked_sum, masked_var, masked_std, normalize_advantage
 
 
 class SimpleMLP(nn.Module):
@@ -37,7 +38,8 @@ class PPO(nn.Module):
                  eps_clip=0.1,
                  max_grad_norm=0.5,
                  normalize_advantage=True,
-                 K_epoch=3,):
+                 K_epoch=3,
+                 **kwargs,):
         super(PPO, self).__init__()
         self.data = []
         self.learning_rate = learning_rate
@@ -77,8 +79,7 @@ class PPO(nn.Module):
         ret = tuple(x.detach() for x in ret)
         self.data = []
         return ret
-    
-    @torch.compile
+        
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
 
@@ -95,8 +96,9 @@ class PPO(nn.Module):
                 for t in reversed(range(delta.shape[1])):
                     last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
                     advantages[:, t] = last_gae
-            
-                advantages = self.get_normalized_advantage(advantages, done_mask)
+
+                if self.normalize_advantage and advantages.shape[0] > 1:
+                    advantages = normalize_advantage(advantages, done_mask)
 
             pi = self.pi(s)
             pi_a = pi.gather(-1,a)
@@ -109,16 +111,6 @@ class PPO(nn.Module):
             loss = loss * done_mask
 
             self.optimizer.zero_grad()
-            loss.mean().backward()
+            loss.backward()
             torch.nn.utils.clip_grad_norm_(self.pi.parameters(), self.max_grad_norm)
             self.optimizer.step()
-
-    def get_normalized_advantage(self, advantages, valid_mask):
-        if self.normalize_advantage and advantages.shape[0] > 1:
-            masked_advantages = advantages * valid_mask
-            N = max(valid_mask.sum(), 1)
-            mean = masked_advantages.sum() / N
-            variance = ((masked_advantages - mean) ** 2 * valid_mask).sum() / N
-            std = torch.sqrt(variance + 1e-8)
-            advantages = (advantages - mean) * valid_mask / (std + 1e-8)
-        return advantages

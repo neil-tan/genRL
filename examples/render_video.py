@@ -1,7 +1,7 @@
 import genesis as gs
 import numpy as np
 import sys
-from transforms3d import euler
+# from transforms3d import euler
 
 def main():
     gs.init(backend=gs.cpu)
@@ -95,7 +95,7 @@ def run_sim(scene, cartpole, cam):
             # pole_angle = cartpole.joints[dofs_idx[1]].dofs_motion_ang
             # pole_angle_velocity = cartpole.joints[dofs_idx[1]].dofs_motion_vel
             pole_angle_velocity = cartpole.get_link("pole").get_ang()
-            pole_angle = euler.quat2euler(cartpole.get_link("pole").get_quat(), axes='sxyz')
+            # pole_angle = euler.quat2euler(cartpole.get_link("pole").get_quat(), axes='sxyz')
             pole_position_l = cartpole.get_link("pole").get_pos()
             # pole_angle_j = cartpole.get_joint('cart_to_pole').get_quat() # always [1, 0, 0, 0]
             # pole_angle_j = cartpole.get_joint('cart_to_pole').get_pos()
