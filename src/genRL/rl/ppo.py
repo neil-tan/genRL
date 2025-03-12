@@ -67,13 +67,12 @@ class PPO(nn.Module):
             r_lst.append(r)
             s_prime_lst.append(s_prime)
             prob_a_lst.append(prob_a)
-            done_mask = 0 if done.all() else 1
-            done_lst.append([done_mask])
+            done_lst.append(~done) # invert done_mask
             
         # s,a,r,s_prime,done_mask, prob_a
         ret = torch.stack(s_lst).transpose(0,1), torch.stack(a_lst).transpose(0,1), \
               torch.stack(r_lst).transpose(1,0), torch.stack(s_prime_lst).transpose(0,1), \
-              torch.tensor(done_lst).transpose(1,0), torch.stack(prob_a_lst).transpose(1,0)
+              torch.stack(done_lst).transpose(1,0), torch.stack(prob_a_lst).transpose(1,0)
                                           
         ret = tuple(x.detach() for x in ret)
         self.data = []
@@ -84,41 +83,44 @@ class PPO(nn.Module):
 
         for i in range(self.K_epoch):
             with torch.no_grad():
-                values = self.v(s).squeeze(-1)
-                values_prime = self.v(s_prime).squeeze(-1)
+                values = self.v(s)
+                values_prime = self.v(s_prime)
                 
-                td_target = r + self.gamma * values_prime * done_mask
+                td_target = r.unsqueeze(-1) + self.gamma * values_prime * done_mask
                 delta = td_target - values
             
                 advantages = torch.zeros_like(delta)
                 last_gae = 0
-                for t in reversed(range(delta.shape[-1])):
+                for t in reversed(range(delta.shape[1])):
                     last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
-                    advantages[:, t] = last_gae # FIXME: done_mask is not used here
+                    advantages[:, t] = last_gae
             
-                advantages = self.get_normalized_advantage(advantages)
+                advantages = self.get_normalized_advantage(advantages, done_mask)
 
-                # for boardcasting
-                advantages = advantages.unsqueeze(-1)
-                td_target = td_target.unsqueeze(-1)
+                # # for boardcasting
+                # advantages = advantages.unsqueeze(-1)
+                # td_target = td_target.unsqueeze(-1)
 
             pi = self.pi(s)
             pi_a = pi.gather(-1,a)
-            ratio = torch.exp(torch.log(pi_a) - torch.log(prob_a))  # a/b == exp(log(a)-log(b))
+            ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
 
             loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
-            loss = loss.squeeze(-1) * done_mask
+            loss = loss * done_mask
 
             self.optimizer.zero_grad()
             loss.mean().backward()
             torch.nn.utils.clip_grad_norm_(self.pi.parameters(), self.max_grad_norm)
             self.optimizer.step()
 
-    def get_normalized_advantage(self, advantages):
-        # FIXME: need to consider how done mask affects the mean and std
+    def get_normalized_advantage(self, advantages, valid_mask):
         if self.normalize_advantage and advantages.shape[0] > 1:
-            return (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+            advantages = advantages * valid_mask
+            mean = advantages.sum() / min(valid_mask.sum(), 1)
+            std = torch.sqrt((advantages - mean).pow(2).sum() / min(valid_mask.sum(), 1))
+            advantages = (advantages - mean) / (std + 1e-8)
+            return advantages * valid_mask
         return advantages
