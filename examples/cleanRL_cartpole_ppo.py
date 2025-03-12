@@ -11,7 +11,9 @@ import numpy as np
 learning_rate = 0.0005
 gamma         = 0.98
 lmbda         = 0.95
-eps_clip      = 0.1
+normalize_advantage = True
+max_grad_norm = 1
+eps_clip      = 0.2
 T_horizon     = 1000
 random_seed   = 42
 num_envs = 1
@@ -22,7 +24,7 @@ torch.manual_seed(random_seed)
 def training_loop(env):
     pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
     v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
-    model = PPO(pi=pi, v=v, learning_rate=learning_rate, gamma=gamma, lmbda=lmbda, eps_clip=eps_clip)
+    model = PPO(pi=pi, v=v, learning_rate=learning_rate, gamma=gamma, normalize_advantage=normalize_advantage, max_grad_norm=max_grad_norm, lmbda=lmbda, eps_clip=eps_clip)
     score = 0.0
     print_interval = 20
 

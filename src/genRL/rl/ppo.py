@@ -83,10 +83,10 @@ class PPO(nn.Module):
 
         for i in range(self.K_epoch):
             with torch.no_grad():
-                values = self.v(s)
-                values_prime = self.v(s_prime)
+                values = self.v(s) * done_mask
+                values_prime = self.v(s_prime) * done_mask
                 
-                td_target = r.unsqueeze(-1) + self.gamma * values_prime * done_mask
+                td_target = r.unsqueeze(-1) + self.gamma * values_prime
                 delta = td_target - values
             
                 advantages = torch.zeros_like(delta)
@@ -96,10 +96,6 @@ class PPO(nn.Module):
                     advantages[:, t] = last_gae
             
                 advantages = self.get_normalized_advantage(advantages, done_mask)
-
-                # # for boardcasting
-                # advantages = advantages.unsqueeze(-1)
-                # td_target = td_target.unsqueeze(-1)
 
             pi = self.pi(s)
             pi_a = pi.gather(-1,a)
@@ -118,9 +114,10 @@ class PPO(nn.Module):
 
     def get_normalized_advantage(self, advantages, valid_mask):
         if self.normalize_advantage and advantages.shape[0] > 1:
-            advantages = advantages * valid_mask
-            mean = advantages.sum() / min(valid_mask.sum(), 1)
-            std = torch.sqrt((advantages - mean).pow(2).sum() / min(valid_mask.sum(), 1))
-            advantages = (advantages - mean) / (std + 1e-8)
-            return advantages * valid_mask
+            masked_advantages = advantages * valid_mask
+            N = max(valid_mask.sum(), 1)
+            mean = masked_advantages.sum() / N
+            variance = ((masked_advantages - mean) ** 2 * valid_mask).sum() / N
+            std = torch.sqrt(variance + 1e-8)
+            advantages = (advantages - mean) * valid_mask / (std + 1e-8)
         return advantages
