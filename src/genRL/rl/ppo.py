@@ -112,16 +112,17 @@ class PPO(nn.Module):
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
-
-            # policy_loss = (-torch.min(surr1, surr2) * done_mask).mean()
-            # value_loss = (F.smooth_l1_loss(self.v(s), td_target, reduce=None) * done_mask).mean()
-            # loss = policy_loss + self.value_loss_coef * value_loss
+            policy_loss = -torch.min(surr1, surr2)
             
-            surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
+            value_loss = F.smooth_l1_loss(self.v(s), td_target, reduce='none')
+            loss = policy_loss + self.value_loss_coef * value_loss
+            loss = (loss * done_mask).mean() # require masked mean here
+            
+            # surr1 = ratio * advantages
+            # surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
 
-            loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
-            loss = (loss * done_mask).mean()
+            # loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
+            # loss = (loss * done_mask).mean()
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -129,8 +130,8 @@ class PPO(nn.Module):
             self.optimizer.step()
             
             self.log("loss", loss)
-            # self.log("policy_loss", policy_loss)
-            # self.log("value_loss", value_loss)
+            self.log("policy_loss", policy_loss)
+            self.log("value_loss", value_loss)
             self.log("advantages_mean", masked_mean(advantages, done_mask))
             self.log("advantages_std", masked_std(advantages, done_mask))
             self.log("values_mean", masked_mean(values, done_mask))

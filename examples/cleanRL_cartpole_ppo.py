@@ -14,7 +14,7 @@ config = {
     "learning_rate": 0.0005,
     "gamma": 0.98,
     "lmbda": 0.95,
-    "value_loss_coef": 2,
+    "value_loss_coef": 0.5,
     "normalize_advantage": True,
     "max_grad_norm": 1,
     "eps_clip": 0.1,
