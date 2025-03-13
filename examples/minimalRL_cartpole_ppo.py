@@ -68,10 +68,8 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            interval_reward = (score.mean()/print_interval).item()
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, interval_reward))
-            run.log({"mean reward": interval_reward})
-            run.log({"reward std": score.std().item()})
+            print("# of episode :{}, avg score : {:.1f}".format(n_epi, (score.mean()/print_interval).item()))
+            run.log({"rewards": score})
             score = 0.0
 
 

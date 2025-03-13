@@ -112,16 +112,11 @@ class PPO(nn.Module):
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
-            policy_loss = -torch.min(surr1, surr2)
+            policy_loss = masked_mean(-torch.min(surr1, surr2), done_mask)
             
-            value_loss = F.smooth_l1_loss(self.v(s), td_target, reduce='none')
-            loss = masked_mean(policy_loss + self.value_loss_coef * value_loss, done_mask)
-            
-            # surr1 = ratio * advantages
-            # surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
-
-            # loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
-            # loss = (loss * done_mask).mean()
+            value_loss = F.smooth_l1_loss(self.v(s), td_target)
+            # value_loss = masked_mean((self.v(s) - td_target).pow(2), done_mask)
+            loss = policy_loss + self.value_loss_coef * value_loss
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -131,12 +126,9 @@ class PPO(nn.Module):
             self.log("loss", loss)
             self.log("policy_loss", policy_loss)
             self.log("value_loss", value_loss)
-            self.log("advantages_mean", masked_mean(advantages, done_mask))
-            self.log("advantages_std", masked_std(advantages, done_mask))
-            self.log("values_mean", masked_mean(values, done_mask))
-            self.log("values_std", masked_std(values, done_mask))
-            self.log("action prob variance", masked_var(pi, done_mask))
-            self.log("action prob mean", masked_mean(pi, done_mask))
+            self.log("advantages", advantages)
+            self.log("values", values)
+            self.log("ratio", ratio)
     
     def log(self, name, value):
         if self.wandb_run:
