@@ -11,12 +11,12 @@ import wandb
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.001,
-    "gamma": 0.98,
-    "lmbda": 0.95,
-    "value_loss_coef": 0.5,
+    "learning_rate": 0.0005,
+    "gamma": 0.99,
+    "lmbda": 0.97,
+    "value_loss_coef": 1,
     "normalize_advantage": True,
-    "max_grad_norm": 1,
+    "max_grad_norm": 0.5,
     "eps_clip": 0.1,
     "T_horizon": 1000,
     "random_seed": 42,
@@ -68,8 +68,9 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, (score.mean()/print_interval).item()))
-            run.log({"rewards": score})
+            interval_score = score/print_interval
+            print("# of episode :{}, avg score : {:.1f}".format(n_epi, interval_score.mean().item()))
+            run.log({"rewards histo": wandb.Histogram(interval_score), "mean reward": interval_score.mean()})
             score = 0.0
 
 
