@@ -11,7 +11,7 @@ import wandb
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.0005,
+    "learning_rate": 0.001,
     "gamma": 0.98,
     "lmbda": 0.95,
     "value_loss_coef": 0.5,
@@ -68,7 +68,10 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, (score.mean()/print_interval).item()))
+            interval_reward = (score.mean()/print_interval).item()
+            print("# of episode :{}, avg score : {:.1f}".format(n_epi, interval_reward))
+            run.log({"mean reward": interval_reward})
+            run.log({"reward std": score.std().item()})
             score = 0.0
 
 
