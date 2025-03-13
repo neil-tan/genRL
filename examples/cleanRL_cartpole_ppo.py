@@ -12,14 +12,15 @@ import wandb
 # Hyperparameters as a dictionary
 config = {
     "learning_rate": 0.0005,
-    "gamma": 0.99,
-    "lmbda": 0.97,
+    "gamma": 0.98,
+    "lmbda": 0.95,
+    "value_loss_coef": 2,
     "normalize_advantage": True,
-    "max_grad_norm": 0.5,
+    "max_grad_norm": 1,
     "eps_clip": 0.1,
     "T_horizon": 1000,
     "random_seed": 42,
-    "num_envs": 16,
+    "num_envs": 1,
     "reward_scale": 0.01,
 }
 
@@ -33,13 +34,13 @@ def training_loop(env):
                     project="genRL_cartpole_ppo",
                     name="test_run1",
                     config=config,
-                    # mode="disabled", # dev dry-run
+                    mode="disabled", # dev dry-run
                 )
 
     pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
     v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
 
-    model = PPO(pi=pi, v=v, **config)
+    model = PPO(pi=pi, v=v, wandb_run=run, **config)
     
     score = 0.0
     print_interval = 20

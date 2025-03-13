@@ -35,16 +35,19 @@ class PPO(nn.Module):
                  learning_rate=0.0005,
                  gamma=0.98,
                  lmbda=0.95,
+                 value_loss_coef=0.5,
                  eps_clip=0.1,
                  max_grad_norm=0.5,
                  normalize_advantage=True,
                  K_epoch=3,
+                 wandb_run=None,
                  **kwargs,):
         super(PPO, self).__init__()
         self.data = []
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.lmbda = lmbda
+        self.value_loss_coef = value_loss_coef
         self.eps_clip = eps_clip
         self.max_grad_norm = max_grad_norm
         self.normalize_advantage = normalize_advantage
@@ -53,6 +56,9 @@ class PPO(nn.Module):
         self.pi = pi
         self.v = v
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        
+        if wandb_run:
+            self.wandb_run = wandb_run
     
     @torch.no_grad()
     def put_data(self, transition):
@@ -107,10 +113,31 @@ class PPO(nn.Module):
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
 
+            # policy_loss = (-torch.min(surr1, surr2) * done_mask).mean()
+            # value_loss = (F.smooth_l1_loss(self.v(s), td_target, reduce=None) * done_mask).mean()
+            # loss = policy_loss + self.value_loss_coef * value_loss
+            
+            surr1 = ratio * advantages
+            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
+
             loss = -torch.min(surr1, surr2) + F.smooth_l1_loss(self.v(s) , td_target)
-            loss = loss * done_mask
+            loss = (loss * done_mask).mean()
 
             self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.pi.parameters(), self.max_grad_norm)
             self.optimizer.step()
+            
+            self.log("loss", loss)
+            # self.log("policy_loss", policy_loss)
+            # self.log("value_loss", value_loss)
+            self.log("advantages_mean", masked_mean(advantages, done_mask))
+            self.log("advantages_std", masked_std(advantages, done_mask))
+            self.log("values_mean", masked_mean(values, done_mask))
+            self.log("values_std", masked_std(values, done_mask))
+            self.log("action prob variance", masked_var(pi, done_mask))
+            self.log("action prob mean", masked_mean(pi, done_mask))
+    
+    def log(self, name, value):
+        if self.wandb_run:
+            self.wandb_run.log({name: value})
