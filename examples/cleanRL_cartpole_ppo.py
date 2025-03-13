@@ -34,7 +34,7 @@ def training_loop(env):
                     project="genRL_cartpole_ppo",
                     name="test_run1",
                     config=config,
-                    mode="disabled", # dev dry-run
+                    # mode="disabled", # dev dry-run
                 )
 
     pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)

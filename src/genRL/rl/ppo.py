@@ -115,8 +115,7 @@ class PPO(nn.Module):
             policy_loss = -torch.min(surr1, surr2)
             
             value_loss = F.smooth_l1_loss(self.v(s), td_target, reduce='none')
-            loss = policy_loss + self.value_loss_coef * value_loss
-            loss = (loss * done_mask).mean() # require masked mean here
+            loss = masked_mean(policy_loss + self.value_loss_coef * value_loss, done_mask)
             
             # surr1 = ratio * advantages
             # surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
