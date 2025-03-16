@@ -75,15 +75,25 @@ class PPO(nn.Module):
             r_lst.append(r)
             s_prime_lst.append(s_prime)
             prob_a_lst.append(prob_a)
-            done_lst.append(~done) # invert done_mask
+            done_lst.append(done) # invert done_mask
             
         # s,a,r,s_prime,done_mask, prob_a
-        ret = torch.stack(s_lst).transpose(0,1), torch.stack(a_lst).transpose(0,1), \
-              torch.stack(r_lst).transpose(1,0), torch.stack(s_prime_lst).transpose(0,1), \
-              torch.stack(done_lst).transpose(1,0), torch.stack(prob_a_lst).transpose(1,0)
+        
+        done_mask = torch.stack(done_lst).transpose(1,0)
+        # done_mask = torch.cat([torch.zeros_like(done_mask[:, 0:1]), done_mask[:, :-1]], dim=1) # right shift
+        done_mask = ~done_mask # invert done_mask
+        
+        s = torch.stack(s_lst).transpose(0,1)# * done_mask
+        a = torch.stack(a_lst).transpose(0,1)# * done_mask
+        r = torch.stack(r_lst).transpose(1,0) * done_mask.squeeze(-1)
+        s_prime = torch.stack(s_prime_lst).transpose(0,1)# * done_mask
+        prob_a = torch.stack(prob_a_lst).transpose(1,0)# * done_mask
+
+        ret = (s, a, r, s_prime, done_mask, prob_a)
+        ret = (x.detach() for x in ret)
                                           
-        ret = tuple(x.detach() for x in ret)
         self.data = []
+        
         return ret
         
     def train_net(self):
@@ -91,10 +101,10 @@ class PPO(nn.Module):
 
         for i in range(self.K_epoch):
             with torch.no_grad():
-                values = self.v(s) * done_mask
-                values_prime = self.v(s_prime) * done_mask
+                values = self.v(s)
+                values_prime = self.v(s_prime)
                 
-                td_target = r.unsqueeze(-1) + self.gamma * values_prime
+                td_target = r.unsqueeze(-1) + self.gamma * values_prime * done_mask
                 delta = td_target - values
             
                 advantages = torch.zeros_like(delta)
@@ -112,15 +122,16 @@ class PPO(nn.Module):
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
-            policy_loss = masked_mean(-torch.min(surr1, surr2), done_mask)
-            
+            policy_loss = -torch.min(surr1, surr2).masked_select(done_mask).mean()
+                        
             value_loss = F.smooth_l1_loss(self.v(s), td_target)
-            # value_loss = masked_mean((self.v(s) - td_target).pow(2), done_mask)
+
             loss = policy_loss + self.value_loss_coef * value_loss
 
             self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.pi.parameters(), self.max_grad_norm)
+            torch.nn.utils.clip_grad_norm_(self.v.parameters(), self.max_grad_norm)
             self.optimizer.step()
             
             self.log("loss", loss)
@@ -129,6 +140,7 @@ class PPO(nn.Module):
             self.log("advantages", advantages)
             self.log("values", values)
             self.log("ratio", ratio)
+            self.log("done mask sum", done_mask.sum())
     
     def log(self, name, value):
         if self.wandb_run:

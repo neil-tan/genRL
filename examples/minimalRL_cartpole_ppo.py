@@ -11,16 +11,16 @@ import wandb
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.0005,
-    "gamma": 0.99,
-    "lmbda": 0.97,
-    "value_loss_coef": 1,
+    "learning_rate": 0.0003,
+    "gamma": 0.98,
+    "lmbda": 0.95,
+    "value_loss_coef": 0.5,
     "normalize_advantage": True,
     "max_grad_norm": 0.5,
-    "eps_clip": 0.1,
+    "eps_clip": 0.2,
     "T_horizon": 1000,
     "random_seed": 42,
-    "num_envs": 1,
+    "num_envs": 16,
     "reward_scale": 0.01,
 }
 

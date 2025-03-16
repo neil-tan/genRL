@@ -68,5 +68,5 @@ pip install -e .
 ### Run Example
 ```bash
 conda activate genRL
-python examples/cartpole_env.py
+python examples/minimalRL_cartpole_ppo.py
 ```
