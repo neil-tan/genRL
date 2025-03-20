@@ -1,6 +1,7 @@
 import genRL.gym_envs.genesis.cartpole
 import gymnasium as gym
 import torch
+import torch.nn.functional as F
 from torch.distributions import Categorical
 from genRL.rl.ppo import PPO, SimpleMLP
 import genesis as gs
@@ -11,13 +12,13 @@ import wandb
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.0003,
-    "gamma": 0.98,
+    "learning_rate": 0.00005,
+    "gamma": 0.99,
     "lmbda": 0.95,
-    "value_loss_coef": 0.5,
-    "normalize_advantage": True,
+    "value_loss_coef": 1,
+    "normalize_advantage": False,
     "max_grad_norm": 0.5,
-    "eps_clip": 0.2,
+    "eps_clip": 0.1,
     "T_horizon": 1000,
     "random_seed": 42,
     "num_envs": 16,
@@ -37,8 +38,8 @@ def training_loop(env):
                     # mode="disabled", # dev dry-run
                 )
 
-    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
-    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
+    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
+    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
 
     model = PPO(pi=pi, v=v, wandb_run=run, **config)
     
