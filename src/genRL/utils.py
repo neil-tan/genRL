@@ -1,5 +1,6 @@
 import torch
-    
+import functools
+
 def masked_mean(x, mask):
     return (x * mask).sum() / max(mask.sum(), 1)
 
@@ -19,3 +20,8 @@ def normalize_advantage(advantages, valid_mask):
     mean = masked_mean(advantages, valid_mask)
     std = masked_std(advantages, valid_mask)
     return (advantages - mean) * valid_mask / (std + 1e-8)
+
+# input: (batch_size, seq_len)
+@functools.lru_cache(maxsize=8)
+def mask_right_shift(mask):
+    return torch.cat([torch.zeros_like(mask[:, 0:1]), mask[:, :-1]], dim=1)

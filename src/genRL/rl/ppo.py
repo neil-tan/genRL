@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
-from genRL.utils import masked_mean, masked_sum, masked_var, masked_std, normalize_advantage
+from genRL.utils import masked_mean, masked_sum, masked_var, masked_std, normalize_advantage, mask_right_shift
 
 
 class SimpleMLP(nn.Module):
@@ -80,12 +80,12 @@ class PPO(nn.Module):
         # s,a,r,s_prime,done_mask, prob_a
         
         done_mask = torch.stack(done_lst).transpose(1,0)
-        # done_mask = torch.cat([torch.zeros_like(done_mask[:, 0:1]), done_mask[:, :-1]], dim=1) # right shift
-        done_mask = ~done_mask # invert done_mask
+        rshift_mask = mask_right_shift(done_mask)
+        rshift_mask = ~rshift_mask # invert done_mask
         
         s = torch.stack(s_lst).transpose(0,1)# * done_mask
         a = torch.stack(a_lst).transpose(0,1)# * done_mask
-        r = torch.stack(r_lst).transpose(1,0) * done_mask.squeeze(-1)
+        r = torch.stack(r_lst).transpose(1,0) * rshift_mask.squeeze(-1)
         s_prime = torch.stack(s_prime_lst).transpose(0,1)# * done_mask
         prob_a = torch.stack(prob_a_lst).transpose(1,0)# * done_mask
 
@@ -104,16 +104,18 @@ class PPO(nn.Module):
                 values = self.v(s)
                 values_prime = self.v(s_prime)
                 
+                # FIXME: there might be a problem with the done_mask at the terminal state
                 td_target = r.unsqueeze(-1) + self.gamma * values_prime * done_mask
                 delta = td_target - values
             
                 advantages = torch.zeros_like(delta)
-                last_gae = 0
+                last_gae = torch.zeros_like(delta[:, 0])
                 for t in reversed(range(delta.shape[1])):
                     last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
                     advantages[:, t] = last_gae
 
                 if self.normalize_advantage and advantages.shape[0] > 1:
+                    self.log("pre-norm advantages", advantages)
                     advantages = normalize_advantage(advantages, done_mask)
 
             pi = self.pi(s)
@@ -130,8 +132,7 @@ class PPO(nn.Module):
 
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.pi.parameters(), self.max_grad_norm)
-            torch.nn.utils.clip_grad_norm_(self.v.parameters(), self.max_grad_norm)
+            torch.nn.utils.clip_grad_norm_(self.parameters(), self.max_grad_norm)
             self.optimizer.step()
             
             self.log("loss", loss)
@@ -140,6 +141,9 @@ class PPO(nn.Module):
             self.log("advantages", advantages)
             self.log("values", values)
             self.log("ratio", ratio)
+            self.log("td_target", td_target)
+            self.log("delta", delta)
+            self.log("r", r)
             self.log("done mask sum", done_mask.sum())
     
     def log(self, name, value):
