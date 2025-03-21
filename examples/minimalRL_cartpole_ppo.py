@@ -25,7 +25,7 @@ config = {
     "num_envs": 16,
     "reward_scale": 0.01,
     "n_epi": 10000,
-    "wandb_video_steps": 500,
+    "wandb_video_steps": 1500,
 }
 
 np.random.seed(config["random_seed"])
@@ -68,6 +68,7 @@ def training_loop(env):
                 
                 done = done.all() if isinstance(done, torch.Tensor) else done
                 if done:
+                    run.log({"t_end/T_horizon": t/config["T_horizon"]})
                     break
 
             model.train_net()
