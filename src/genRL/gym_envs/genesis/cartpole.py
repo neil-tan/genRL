@@ -91,7 +91,7 @@ class GenCartPoleEnv(gym.Env):
         )
         
         self.cam = self.scene.add_camera(
-            res    = (512, 240),
+            res    = (1024, 480),
             pos    = (0.0, 16, 0.5),
             lookat = (0.0, 0.0, 3),
             fov    = 65,
@@ -269,7 +269,7 @@ class GenCartPoleEnv(gym.Env):
         video_path = f"{self._temp_video_dir.name}/{video_filename}"
         
         # Upload to wandb if it's available and initialized
-        factor = 6
+        factor = 10
         images = downsample_list_image_to_video_array(self.cam._recorded_imgs, factor=factor)
         # self.cam.stop_recording(save_to_filename=video_path, fps=self.metadata["render_fps"])
         

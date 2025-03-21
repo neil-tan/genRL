@@ -25,7 +25,7 @@ config = {
     "num_envs": 16,
     "reward_scale": 0.01,
     "n_epi": 10000,
-    "wandb_video_steps": 1500,
+    "wandb_video_steps": 500,
 }
 
 np.random.seed(config["random_seed"])
