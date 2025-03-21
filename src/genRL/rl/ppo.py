@@ -33,8 +33,10 @@ class PPO(nn.Module):
                  pi,
                  v,
                  learning_rate=0.0005,
+                 weight_decay=0.0001,
                  gamma=0.98,
                  lmbda=0.95,
+                 entropy_coef=0.01,
                  value_loss_coef=0.5,
                  eps_clip=0.1,
                  max_grad_norm=0.5,
@@ -45,8 +47,10 @@ class PPO(nn.Module):
         super(PPO, self).__init__()
         self.data = []
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
         self.gamma = gamma
         self.lmbda = lmbda
+        self.entropy_coef = entropy_coef
         self.value_loss_coef = value_loss_coef
         self.eps_clip = eps_clip
         self.max_grad_norm = max_grad_norm
@@ -55,7 +59,7 @@ class PPO(nn.Module):
         
         self.pi = pi
         self.v = v
-        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+        self.optimizer = optim.Adam(self.parameters(), lr=learning_rate, weight_decay=self.weight_decay)
         
         if wandb_run:
             self.wandb_run = wandb_run
@@ -119,16 +123,23 @@ class PPO(nn.Module):
                     advantages = normalize_advantage(advantages, done_mask)
 
             pi = self.pi(s)
+            # FIXME: check if a is the correct action or masked correct action
+            # TODO: log entropy
             pi_a = pi.gather(-1,a)
             ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
-            policy_loss = -torch.min(surr1, surr2).mean()
+            # FIXME: divide by the number of valid samples or batch size?
+            # policy_loss = -torch.min(surr1, surr2).mean()
+            policy_loss = -torch.min(surr1, surr2).masked_select(done_mask).mean()
                         
             value_loss = F.smooth_l1_loss(self.v(s), td_target)
+            # Proper entropy calculation for a categorical policy
+            entropy = Categorical(probs=pi).entropy()
+            entropy_loss = -entropy.mean()
 
-            loss = policy_loss + self.value_loss_coef * value_loss
+            loss = policy_loss + self.value_loss_coef * value_loss + self.entropy_coef * entropy_loss
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -145,6 +156,8 @@ class PPO(nn.Module):
             self.log("delta", delta)
             self.log("r", r)
             self.log("done mask sum", done_mask.sum())
+            self.log("entropy", entropy)
+            self.log("entropy_loss", entropy_loss)
     
     def log(self, name, value):
         if self.wandb_run:

@@ -13,9 +13,11 @@ from tqdm import trange
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.001,
-    "gamma": 0.99,
-    "lmbda": 0.97,
+    "learning_rate": 0.00001,
+    "weight_decay": 0.000001,
+    "gamma": 0.98,
+    "lmbda": 0.95,
+    "entropy_coef": 0.01,
     "value_loss_coef": 0.5,
     "normalize_advantage": True,
     "max_grad_norm": 0.5,
@@ -43,6 +45,8 @@ def training_loop(env):
 
     pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
     v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
+
+    wandb.watch([pi, v], log="all")
 
     model = PPO(pi=pi, v=v, wandb_run=run, **config)
     
