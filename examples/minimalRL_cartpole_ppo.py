@@ -8,13 +8,14 @@ import genesis as gs
 import sys
 import numpy as np
 import wandb
+from tqdm import trange
 
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
     "learning_rate": 0.0001,
-    "gamma": 0.98,
-    "lmbda": 0.95,
+    "gamma": 0.99,
+    "lmbda": 0.97,
     "value_loss_coef": 0.5,
     "normalize_advantage": True,
     "max_grad_norm": 0.5,
@@ -22,7 +23,9 @@ config = {
     "T_horizon": 1000,
     "random_seed": 42,
     "num_envs": 16,
-    "reward_scale": 0.005,
+    "reward_scale": 0.01,
+    "n_epi": 10000,
+    "wandb_video_step": 10_000,
 }
 
 np.random.seed(config["random_seed"])
@@ -38,19 +41,19 @@ def training_loop(env):
                     # mode="disabled", # dev dry-run
                 )
 
-    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
-    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
+    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
+    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
 
     model = PPO(pi=pi, v=v, wandb_run=run, **config)
     
     score = 0.0
     print_interval = 20
 
-    for n_epi in range(10000):
+    for n_epi in trange(config["n_epi"], desc="n_epi"):
         s, _ = env.reset()
         done = False
         while not done:
-            for t in range(config["T_horizon"]):
+            for t in trange(config["T_horizon"], desc="env", leave=False):
                 prob = model.pi(s)
                 m = Categorical(prob)
                 a = m.sample().unsqueeze(-1)
@@ -82,6 +85,7 @@ def main():
                    targetVelocity=10,
                    num_envs=config["num_envs"],
                    return_tensor=True,
+                   wandb_video_step=config["wandb_video_step"],
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.cpu,
                    seed=config["random_seed"],

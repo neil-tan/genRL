@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 from genRL.utils import masked_mean, masked_sum, masked_var, masked_std, normalize_advantage, mask_right_shift
-
+from tqdm import trange
 
 class SimpleMLP(nn.Module):
     def __init__(self,
@@ -99,7 +99,7 @@ class PPO(nn.Module):
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
 
-        for i in range(self.K_epoch):
+        for i in trange(self.K_epoch, desc="ppo", leave=False):
             with torch.no_grad():
                 values = self.v(s)
                 values_prime = self.v(s_prime)
@@ -135,10 +135,10 @@ class PPO(nn.Module):
             torch.nn.utils.clip_grad_norm_(self.parameters(), self.max_grad_norm)
             self.optimizer.step()
             
+            self.log("advantages", advantages)
             self.log("loss", loss)
             self.log("policy_loss", policy_loss)
             self.log("value_loss", value_loss)
-            self.log("advantages", advantages)
             self.log("values", values)
             self.log("ratio", ratio)
             self.log("td_target", td_target)
