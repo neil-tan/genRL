@@ -73,9 +73,10 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            interval_score = (score/print_interval).mean()
-            epi_bar.write(f"n_epi: {n_epi}, score: {interval_score}")
-            run.log({"rewards histo": wandb.Histogram(interval_score), "mean reward": interval_score.mean()})
+            interval_score = (score/print_interval)
+            interval_mean_score = (score/print_interval).mean()
+            epi_bar.write(f"n_epi: {n_epi}, score: {interval_mean_score}")
+            run.log({"rewards histo": wandb.Histogram(interval_score), "mean reward": interval_mean_score})
             score = 0.0
 
 
