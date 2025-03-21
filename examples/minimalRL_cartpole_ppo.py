@@ -13,7 +13,7 @@ from tqdm import trange
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.0001,
+    "learning_rate": 0.001,
     "gamma": 0.99,
     "lmbda": 0.97,
     "value_loss_coef": 0.5,
@@ -25,7 +25,7 @@ config = {
     "num_envs": 16,
     "reward_scale": 0.01,
     "n_epi": 10000,
-    "wandb_video_steps": 500,
+    "wandb_video_steps": 1500,
 }
 
 np.random.seed(config["random_seed"])
@@ -53,24 +53,25 @@ def training_loop(env):
     for n_epi in epi_bar:
         s, _ = env.reset()
         done = False
-        while not done:
-            for t in trange(config["T_horizon"], desc="env", leave=False):
-                prob = model.pi(s)
-                m = Categorical(prob)
-                a = m.sample().unsqueeze(-1)
-                s_prime, r, done, truncated, info = env.step(a)
 
-                prob_a = torch.gather(prob, -1, a)
-                model.put_data((s, a.detach(), r*config["reward_scale"], s_prime, prob_a.detach(), done))
-                s = s_prime
+        for t in trange(config["T_horizon"], desc="env", leave=False):
+            prob = model.pi(s)
+            m = Categorical(prob)
+            a = m.sample().unsqueeze(-1)
+            s_prime, r, done, truncated, info = env.step(a)
 
-                score += r
-                
-                done = done.all() if isinstance(done, torch.Tensor) else done
-                if done:
-                    break
+            prob_a = torch.gather(prob, -1, a)
+            model.put_data((s, a.detach(), r*config["reward_scale"], s_prime, prob_a.detach(), done))
+            s = s_prime
 
-            model.train_net()
+            score += r
+            
+            done = done.all() if isinstance(done, torch.Tensor) else done
+            if done:
+                run.log({"t_end/T_horizon": t/config["T_horizon"]})
+                break
+
+        model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
             interval_score = (score/print_interval)
