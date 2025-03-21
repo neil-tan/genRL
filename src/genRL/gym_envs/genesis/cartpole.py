@@ -7,6 +7,7 @@ from gymnasium import spaces
 import torch
 import wandb
 import tempfile
+from genRL.utils import downsample_list_image_to_video_array
 # %%
 class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
@@ -18,7 +19,7 @@ class GenCartPoleEnv(gym.Env):
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
-                 record_video_steps = None,
+                 wandb_video_steps = None,
                  logging_level="info",
                  gs_backend = gs.cpu,
                  seed=None,
@@ -28,7 +29,6 @@ class GenCartPoleEnv(gym.Env):
         self.render_mode = render_mode
         self.num_envs = num_envs
         self.return_tensor = return_tensor
-        self.record_video_steps = record_video_steps
 
         self.x_threshold = 2.4
         self.theta_threshold_degrees = 12
@@ -49,6 +49,10 @@ class GenCartPoleEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         
+        self.wandb_video_steps = wandb_video_steps
+        self._last_video_log_step = 0
+        self._temp_video_dir = None if self.wandb_video_steps is None else tempfile.TemporaryDirectory()
+        print(f"Temp video dir: {self._temp_video_dir}")
         
         ### simulator setup
         gs.init(backend=gs_backend,
@@ -58,8 +62,7 @@ class GenCartPoleEnv(gym.Env):
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",
             viewer_options = gs.options.ViewerOptions(
-                # res           = (2048, 960),
-                res = (320, 240),
+                res           = (2048, 960),
                 camera_pos    = (0.0, 8, 0.5),
                 camera_lookat = (0.0, 0.0, 3),
                 camera_fov    = 60,
@@ -88,10 +91,10 @@ class GenCartPoleEnv(gym.Env):
         )
         
         self.cam = self.scene.add_camera(
-            res    = (640, 480),
-            pos    = (0.0, 8, 0.5),
+            res    = (512, 240),
+            pos    = (0.0, 16, 0.5),
             lookat = (0.0, 0.0, 3),
-            fov    = 60,
+            fov    = 65,
             GUI    = False,
         )
 
@@ -175,17 +178,21 @@ class GenCartPoleEnv(gym.Env):
         return self.observation(), self._get_info()
     
     def _start_recording(self):
-        if self.record_video_steps is None:
+        assert self.wandb_video_steps > 0
+
+        if self.wandb_video_steps is None:
             return
-        
-        assert self.render_mode == "human" and self.record_video_steps > 0
+
         try:
             wandb_step = wandb.run.step
         except AttributeError:
             wandb_step = 0
 
-        if wandb_step % self.record_video_steps == 0 and not self.cam._in_recording:
+        if ((wandb_step - self._last_video_log_step) > self.wandb_video_steps or \
+                self._last_video_log_step == 0) and \
+                     not self.cam._in_recording:
             self.cam.start_recording()
+            self._last_video_log_step = wandb_step
 
     @torch.no_grad()
     # action shape: (num_envs, action_dim)
@@ -244,24 +251,37 @@ class GenCartPoleEnv(gym.Env):
     def close(self):
         self._stop_viewer()
         self._stop_recording()
+        if self._temp_video_dir is not None:
+            self._temp_video_dir.cleanup()
         gs.destroy()
     
     def _stop_recording(self):
-        if not self.cam._in_recording:
+        if not self.cam._in_recording or len(self.cam._recorded_imgs) == 0:
             return
-        # Create a temporary file with .mp4 extension
-        with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp_file:
-            video_path = tmp_file.name
+
+        # Only proceed if we have a temporary directory set up
+        if self._temp_video_dir is None:
+            self.cam.stop_recording()
+            return
             
-            # Save the recording to the temporary file
-            self.cam.stop_recording(save_to_filename=video_path, fps=self.metadata["render_fps"])
-            
-            # Upload to wandb if it's available and initialized
-            try:
-                if wandb.run is not None:
-                    wandb.log({"cartpole_video": wandb.Video(video_path)})
-            except Exception as e:
-                print(f"Failed to upload video to wandb: {e}")
+        # Create a unique filename in the temporary directory
+        video_filename = f"cartpole_video_{self.current_steps_count}.mp4"
+        video_path = f"{self._temp_video_dir.name}/{video_filename}"
+        
+        # Upload to wandb if it's available and initialized
+        factor = 6
+        images = downsample_list_image_to_video_array(self.cam._recorded_imgs, factor=factor)
+        # self.cam.stop_recording(save_to_filename=video_path, fps=self.metadata["render_fps"])
+        
+        # Upload to wandb if it's available and initialized
+        try:
+            if wandb.run is not None:
+                wandb.log({"cartpole_video": wandb.Video(images, fps=self.metadata["render_fps"]/factor)})
+                # wandb.log({"cartpole_video": wandb.Video(video_path, format="mp4")})
+        except Exception as e:
+            print(f"Failed to upload video to wandb: {e}")
+        
+        self.cam.stop_recording(save_to_filename=video_path)
     
     def _stop_viewer(self):
         # self.scene._visualizer._viewer

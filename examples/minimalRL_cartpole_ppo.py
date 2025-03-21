@@ -25,7 +25,7 @@ config = {
     "num_envs": 16,
     "reward_scale": 0.01,
     "n_epi": 10000,
-    "wandb_video_step": 10_000,
+    "wandb_video_steps": 1500,
 }
 
 np.random.seed(config["random_seed"])
@@ -41,15 +41,16 @@ def training_loop(env):
                     # mode="disabled", # dev dry-run
                 )
 
-    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
-    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
+    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
+    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
 
     model = PPO(pi=pi, v=v, wandb_run=run, **config)
     
     score = 0.0
     print_interval = 20
 
-    for n_epi in trange(config["n_epi"], desc="n_epi"):
+    epi_bar = trange(config["n_epi"], desc="n_epi")
+    for n_epi in epi_bar:
         s, _ = env.reset()
         done = False
         while not done:
@@ -72,8 +73,8 @@ def training_loop(env):
             model.train_net()
 
         if n_epi%print_interval==0 and n_epi!=0:
-            interval_score = score/print_interval
-            print("# of episode :{}, avg score : {:.1f}".format(n_epi, interval_score.mean().item()))
+            interval_score = (score/print_interval).mean()
+            epi_bar.write(f"n_epi: {n_epi}, score: {interval_score}")
             run.log({"rewards histo": wandb.Histogram(interval_score), "mean reward": interval_score.mean()})
             score = 0.0
 
@@ -85,7 +86,7 @@ def main():
                    targetVelocity=10,
                    num_envs=config["num_envs"],
                    return_tensor=True,
-                   wandb_video_step=config["wandb_video_step"],
+                   wandb_video_steps=config["wandb_video_steps"],
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.cpu,
                    seed=config["random_seed"],
