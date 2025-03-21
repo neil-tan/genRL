@@ -13,11 +13,11 @@ from tqdm import trange
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "learning_rate": 0.00001,
+    "learning_rate": 0.0001,
     "weight_decay": 0.000001,
     "gamma": 0.98,
     "lmbda": 0.95,
-    "entropy_coef": 0.01,
+    "entropy_coef": 0.001,
     "value_loss_coef": 0.5,
     "normalize_advantage": True,
     "max_grad_norm": 0.5,
