@@ -124,7 +124,6 @@ class PPO(nn.Module):
 
             pi = self.pi(s)
             # FIXME: check if a is the correct action or masked correct action
-            # TODO: log entropy
             pi_a = pi.gather(-1,a)
             ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
 
