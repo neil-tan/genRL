@@ -52,13 +52,16 @@ def get_config(trial, fast_dev_run=False, **kwargs):
         "n_epi": 10000,
         "wandb_video_steps": 1500,
     }
+    
+    config.update(kwargs)
+
     if fast_dev_run:
         config["n_epi"] = 8
         config["wandb_video_steps"] = 20
     return config
 
 
-def training_loop(env, config, run=None, epi_callback=None):
+def training_loop(env, config, run=None, epi_callback=None, compile=False):
     pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
     v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
 
@@ -69,6 +72,8 @@ def training_loop(env, config, run=None, epi_callback=None):
         run = wandb.run
 
     model = PPO(pi=pi, v=v, wandb_run=run, **config)
+    if compile:
+        model.compile()
     
     score = 0.0
     report_interval = min(20, config["n_epi"]-1)
@@ -129,6 +134,7 @@ def objective(trial,
                     project=project_name,
                     name=run_name,
                     config=config,
+                    reinit=True,
                     # mode="disabled", # dev dry-run
                 )
 
@@ -146,7 +152,7 @@ def objective(trial,
     
     env.reset()
     
-    result = training_loop(env, config, run, epi_callback)
+    result = training_loop(env, config, run, epi_callback, compile=True)
 
     env.render()
     env.close()

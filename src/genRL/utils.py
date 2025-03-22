@@ -2,6 +2,12 @@ import torch
 import functools
 import numpy as np
 from typing import List
+import wandb
+import tempfile
+import pickle
+import os
+import re
+import optuna
 
 def masked_mean(x, mask):
     return (x * mask).sum() / max(mask.sum(), 1)
@@ -37,4 +43,83 @@ def downsample_list_image_to_video_array(images:List[np.array], factor:int):
     images = np.stack(images[::factor], axis=0)
     images = np.transpose(images, (0, 3, 1, 2))
     return images
+
+def save_tune_session(study, project_name, study_name):
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as tmp:
+        pickle.dump(study, tmp, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.flush()
+        os.fsync(tmp.fileno())
+        
+        # Verify the file was written correctly
+        tmp.seek(0)
+        try:
+            pickle.load(tmp)
+        except Exception as e:
+            print(f"Error verifying saved study: {e}")
+            return
+        
+        run = wandb.init(project=project_name, job_type="job-type")
+        artifact = wandb.Artifact(f"{study_name}_session_info", type="optuna_session")
+        artifact.add_file(tmp.name, name="session_info.pkl")
+        run.log_artifact(artifact)
+        run.finish()
+
+def load_tune_session(project_name, study_name, version="latest"):
+    api = wandb.Api()
+
+    try:
+        artifact = api.artifact(f"{project_name}/{study_name}_session_info:{version}")
+    except wandb.errors.CommError as e:
+        if re.search(r'project.*not found', str(e).lower())\
+            or re.search(r'artifact.*not found', str(e).lower()):
+            print("Project not found")
+            return None
+        raise e
+    except Exception as e:
+        print(f"Failed to load artifact: {e}")
+        raise e
     
+    with tempfile.TemporaryDirectory() as tmpdir:
+        artifact.download(tmpdir)
+        file_path = os.path.join(tmpdir, "session_info.pkl")
+        
+        if not os.path.exists(file_path):
+            print(f"session_info.pkl not found in the artifact")
+            return None
+        
+        with open(file_path, 'rb') as f:
+            try:
+                session_info = pickle.load(f)
+            except EOFError as e:
+                print("Corrupted session file. Unable to load session info.")
+                raise e
+            except Exception as e:
+                print(f"Error loading session info: {e}")
+                raise e
+    
+    return session_info
+
+def wandb_load_study(project_name,
+                     study_name,
+                     resume_from_version=None,
+                     **kwargs):
+
+    session_info = load_tune_session(project_name, study_name, version=resume_from_version)
+    total_trials_completed = 0
+    if session_info is not None:
+        print("Resuming existing study session")
+        study = session_info["study"]
+        total_trials_completed = session_info["total_trials_completed"]
+    else:
+        # If the study doesn't exist, create a new one
+        study = optuna.create_study(**kwargs)
+        print("Created new study")
+    
+    return study, total_trials_completed
+
+def wandb_save_study(study, total_trials_completed, project_name, study_name):
+    session_info = {
+        "study" : study,
+        "total_trials_completed" : total_trials_completed,
+    }
+    save_tune_session(session_info, project_name, study_name)
