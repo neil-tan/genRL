@@ -255,6 +255,10 @@ class GenCartPoleEnv(gym.Env):
             self._temp_video_dir.cleanup()
         gs.destroy()
     
+    def __del__(self):
+        if gs._initialized:
+            self.close()
+    
     def _stop_recording(self):
         if not self.cam._in_recording or len(self.cam._recorded_imgs) == 0:
             return

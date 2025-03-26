@@ -37,6 +37,7 @@ torch.manual_seed(config["random_seed"])
 def get_config(trial, fast_dev_run=False, **kwargs):
     config = {
         "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 1e-2),
+        "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 8, 10, 16]),
         "weight_decay": trial.suggest_loguniform("weight_decay", 1e-6, 1e-4),
         "gamma": trial.suggest_uniform("gamma", 0.9, 0.999),
         "lmbda": trial.suggest_uniform("lmbda", 0.8, 0.99),

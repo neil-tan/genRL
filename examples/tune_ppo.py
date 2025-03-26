@@ -13,8 +13,8 @@ def main():
     study_name="ppo_cartpole"
     fast_dev_run = False
     save_every_n_iters = 3
-    n_trials = 100
-    n_epi = 1000
+    n_trials = 200
+    n_epi = 800
     
     if fast_dev_run:
         save_every_n_iters = 2
