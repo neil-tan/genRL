@@ -1,4 +1,5 @@
 import genRL.gym_envs.genesis.cartpole
+import genRL.gym_envs.test_envs.cartpole_dummy
 import gymnasium as gym
 import torch
 import torch.nn.functional as F
