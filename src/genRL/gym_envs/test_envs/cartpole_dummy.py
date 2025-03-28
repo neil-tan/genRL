@@ -1,6 +1,4 @@
 import numpy as np
-import genesis as gs
-import sys
 import gymnasium as gym
 from gymnasium import spaces
 import torch
@@ -13,6 +11,7 @@ class GenCartPoleDummyBase(gym.Env):
                  **kwargs,
                  ):
         self.num_envs = num_envs
+        self.return_tensor = True
 
         self.x_threshold = 2.4
         self.theta_threshold_degrees = 12
@@ -88,7 +87,6 @@ class GenCartPoleDummyBase(gym.Env):
     def step(self, action):
         assert action.shape == (self.num_envs, 1), f"action shape {action.shape} is not valid"
         assert action.dtype == torch.int64, f"action dtype {action.dtype} is not valid"
-        assert action.min() == 0 and action.max() == 1, f"action {action} is not valid"
 
         done = torch.zeros((self.num_envs), 1) if self.current_timestep < self.rewards.shape[0] - 1 else torch.ones((self.num_envs), 1)
         done = done.to(torch.bool)
@@ -112,6 +110,9 @@ class GenCartPoleDummyBase(gym.Env):
 
 
 class GenCartPoleDummyOnes(GenCartPoleDummyBase):
+    def __init__(self, num_envs=1, **kwargs):
+        super().__init__(num_envs, **kwargs)
+    
     def _init_dummy_trajectory(self):
         reward_length = 5
         self.rewards = torch.ones((reward_length), dtype=torch.float32)
