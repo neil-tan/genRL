@@ -1,4 +1,5 @@
 import genRL.gym_envs.genesis.cartpole
+import genRL.gym_envs.test_envs.cartpole_dummy
 import gymnasium as gym
 import torch
 import torch.nn.functional as F
@@ -20,11 +21,13 @@ def main():
                     # mode="disabled", # dev dry-run
                 )
 
-    env = gym.make("GenCartPole-v0",
+    # env = gym.make("GenCartPole-v0",
+    env = gym.make("GenCartPole-v0-dummy-ones",
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                   num_envs=config["num_envs"],
+                #    num_envs=config["num_envs"],
+                   num_envs=1,
                    return_tensor=True,
                    wandb_video_steps=config["wandb_video_steps"],
                    logging_level="warning", # "info", "warning", "error", "debug"

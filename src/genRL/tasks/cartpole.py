@@ -1,4 +1,5 @@
 import genRL.gym_envs.genesis.cartpole
+import genRL.gym_envs.test_envs.cartpole_dummy
 import gymnasium as gym
 import torch
 import torch.nn.functional as F
@@ -36,20 +37,21 @@ torch.manual_seed(config["random_seed"])
 
 def get_config(trial, fast_dev_run=False, **kwargs):
     config = {
-        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 1e-2),
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 5e-4),
         "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 8, 10, 16]),
-        "weight_decay": trial.suggest_loguniform("weight_decay", 1e-6, 1e-4),
-        "gamma": trial.suggest_uniform("gamma", 0.9, 0.999),
-        "lmbda": trial.suggest_uniform("lmbda", 0.8, 0.99),
+        "weight_decay": trial.suggest_loguniform("weight_decay", 1e-6, 5e-5),
+        "gamma": trial.suggest_uniform("gamma", 0.96, 0.99),
+        "lmbda": trial.suggest_uniform("lmbda", 0.975, 0.999),
         "entropy_coef": trial.suggest_loguniform("entropy_coef", 1e-6, 1e-2),
         "value_loss_coef": trial.suggest_uniform("value_loss_coef", 0.1, 1.0),
-        "normalize_advantage": trial.suggest_categorical("normalize_advantage", [True, False]),
-        "max_grad_norm": trial.suggest_uniform("max_grad_norm", 0.1, 1.0),
+        # "normalize_advantage": trial.suggest_categorical("normalize_advantage", [True, False]),
+        "normalize_advantage": False,
+        "max_grad_norm": trial.suggest_uniform("max_grad_norm", 0.05, 0.3),
         "eps_clip": trial.suggest_uniform("eps_clip", 0.05, 0.2),
         "T_horizon": 1000,
         "random_seed": 42,
-        "num_envs": trial.suggest_categorical("num_envs", [1, 8, 16, 32]),
-        "reward_scale": trial.suggest_categorical("reward_scale", [0.01, 0.1, 1.0]),
+        "num_envs": trial.suggest_categorical("num_envs", [1, 8, 32]),
+        "reward_scale": trial.suggest_uniform("reward_scale", 0.01, 0.1),
         "n_epi": 10000,
         "wandb_video_steps": 1500,
     }

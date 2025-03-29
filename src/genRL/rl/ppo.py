@@ -93,7 +93,7 @@ class PPO(nn.Module):
         s_prime = torch.stack(s_prime_lst).transpose(0,1)# * done_mask
         prob_a = torch.stack(prob_a_lst).transpose(1,0)# * done_mask
 
-        ret = (s, a, r, s_prime, done_mask, prob_a)
+        ret = (s, a, r, s_prime, rshift_mask, prob_a)
         ret = (x.detach() for x in ret)
                                           
         self.data = []
