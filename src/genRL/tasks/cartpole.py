@@ -50,10 +50,11 @@ def get_config(trial, fast_dev_run=False, **kwargs):
         "eps_clip": trial.suggest_uniform("eps_clip", 0.05, 0.2),
         "T_horizon": 1000,
         "random_seed": 42,
-        "num_envs": trial.suggest_categorical("num_envs", [1, 8, 32]),
+        # "num_envs": trial.suggest_categorical("num_envs", [1, 8, 32]),
+        "num_envs": 8,
         "reward_scale": trial.suggest_uniform("reward_scale", 0.01, 0.1),
-        "n_epi": 10000,
-        "wandb_video_steps": 1500,
+        "n_epi": 15000,
+        "wandb_video_steps": 2000,
     }
     
     config.update(kwargs)

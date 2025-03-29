@@ -84,16 +84,15 @@ class PPO(nn.Module):
         # s,a,r,s_prime,done_mask, prob_a
         
         done_mask = torch.stack(done_lst).transpose(1,0)
-        rshift_mask = mask_right_shift(done_mask)
-        rshift_mask = ~rshift_mask # invert done_mask
         
         s = torch.stack(s_lst).transpose(0,1)# * done_mask
         a = torch.stack(a_lst).transpose(0,1)# * done_mask
-        r = torch.stack(r_lst).transpose(1,0) * rshift_mask.squeeze(-1)
+        # r = torch.stack(r_lst).transpose(1,0) * rshift_mask.squeeze(-1)
+        r = torch.stack(r_lst).transpose(1,0)
         s_prime = torch.stack(s_prime_lst).transpose(0,1)# * done_mask
         prob_a = torch.stack(prob_a_lst).transpose(1,0)# * done_mask
 
-        ret = (s, a, r, s_prime, rshift_mask, prob_a)
+        ret = (s, a, r, s_prime, done_mask, prob_a)
         ret = (x.detach() for x in ret)
                                           
         self.data = []
@@ -102,6 +101,8 @@ class PPO(nn.Module):
         
     def train_net(self):
         s, a, r, s_prime, done_mask, prob_a = self.make_batch()
+        
+        valid_mask = ~mask_right_shift(done_mask)
 
         for i in trange(self.K_epoch, desc="ppo", leave=False):
             with torch.no_grad():
@@ -109,18 +110,18 @@ class PPO(nn.Module):
                 values_prime = self.v(s_prime)
                 
                 # FIXME: there might be a problem with the done_mask at the terminal state
-                td_target = r.unsqueeze(-1) + self.gamma * values_prime * done_mask
+                td_target = r.unsqueeze(-1) + self.gamma * values_prime * ~done_mask
                 delta = td_target - values
             
                 advantages = torch.zeros_like(delta)
                 last_gae = torch.zeros_like(delta[:, 0])
                 for t in reversed(range(delta.shape[1])):
-                    last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * done_mask[:, t]
+                    last_gae = delta[:, t] + self.gamma * self.lmbda * last_gae * ~done_mask[:, t]
                     advantages[:, t] = last_gae
 
                 if self.normalize_advantage and advantages.shape[0] > 1:
                     self.log("pre-norm advantages", advantages)
-                    advantages = normalize_advantage(advantages, done_mask)
+                    advantages = normalize_advantage(advantages, valid_mask)
 
             pi = self.pi(s)
             # FIXME: check if a is the correct action or masked correct action
@@ -128,12 +129,12 @@ class PPO(nn.Module):
             ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
+            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * valid_mask
             # FIXME: divide by the number of valid samples or batch size?
             # policy_loss = -torch.min(surr1, surr2).mean()
-            policy_loss = -torch.min(surr1, surr2).masked_select(done_mask).mean()
+            policy_loss = -torch.min(surr1, surr2).masked_select(valid_mask).mean()
                         
-            value_loss = F.smooth_l1_loss(self.v(s), td_target)
+            value_loss = F.smooth_l1_loss(self.v(s), td_target, reduction='none').masked_select(valid_mask).mean()
             # Proper entropy calculation for a categorical policy
             entropy = Categorical(probs=pi).entropy()
             entropy_loss = -entropy.mean()
