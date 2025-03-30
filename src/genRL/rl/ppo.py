@@ -108,8 +108,7 @@ class PPO(nn.Module):
             with torch.no_grad():
                 values = self.v(s)
                 values_prime = self.v(s_prime)
-                
-                # FIXME: there might be a problem with the done_mask at the terminal state
+
                 td_target = r.unsqueeze(-1) + self.gamma * values_prime * ~done_mask
                 delta = td_target - values
             
@@ -124,18 +123,16 @@ class PPO(nn.Module):
                     advantages = normalize_advantage(advantages, valid_mask)
 
             pi = self.pi(s)
-            # FIXME: check if a is the correct action or masked correct action
             pi_a = pi.gather(-1,a)
             ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * valid_mask
-            # FIXME: divide by the number of valid samples or batch size?
-            # policy_loss = -torch.min(surr1, surr2).mean()
+            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip)
+
             policy_loss = -torch.min(surr1, surr2).masked_select(valid_mask).mean()
                         
             value_loss = F.smooth_l1_loss(self.v(s), td_target, reduction='none').masked_select(valid_mask).mean()
-            # Proper entropy calculation for a categorical policy
+
             entropy = Categorical(probs=pi).entropy()
             entropy_loss = -entropy.mean()
 
@@ -155,7 +152,7 @@ class PPO(nn.Module):
             self.log("td_target", td_target)
             self.log("delta", delta)
             self.log("r", r)
-            self.log("done mask sum", done_mask.sum())
+            self.log("valid mask sum", valid_mask.sum())
             self.log("entropy", entropy)
             self.log("entropy_loss", entropy_loss)
     

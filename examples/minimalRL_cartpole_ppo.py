@@ -21,13 +21,15 @@ def main():
                     # mode="disabled", # dev dry-run
                 )
 
+    config["normalize_advantage"] = False
     # env = gym.make("GenCartPole-v0",
-    env = gym.make("GenCartPole-v0-dummy-ones",
+    # env = gym.make("GenCartPole-v0-dummy-ones",
+    env = gym.make("GenCartPole-dummy_inverse_trig-v0",
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
                 #    num_envs=config["num_envs"],
-                   num_envs=1,
+                   num_envs=3,
                    return_tensor=True,
                    wandb_video_steps=config["wandb_video_steps"],
                    logging_level="warning", # "info", "warning", "error", "debug"
@@ -37,7 +39,7 @@ def main():
     
     env.reset()
     
-    if not sys.platform == "linux":
+    if not sys.platform == "linux" and sys.gettrace() is None:
         gs.tools.run_in_another_thread(fn=training_loop, args=(env, config, run))
     else:
         training_loop(env, config, run)
