@@ -89,22 +89,23 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
         s, _ = env.reset()
         done = False
 
-        for t in trange(config["T_horizon"], desc="env", leave=False):
-            prob = model.pi(s)
-            m = Categorical(prob)
-            a = m.sample().unsqueeze(-1)
-            s_prime, r, done, truncated, info = env.step(a)
+        with torch.no_grad():
+            for t in trange(config["T_horizon"], desc="env", leave=False):
+                prob = model.pi(s)
+                m = Categorical(prob)
+                a = m.sample().unsqueeze(-1)
+                s_prime, r, done, truncated, info = env.step(a)
 
-            prob_a = torch.gather(prob, -1, a)
-            model.put_data((s, a.detach(), r*config["reward_scale"], s_prime, prob_a.detach(), done))
-            s = s_prime
+                prob_a = torch.gather(prob, -1, a)
+                model.put_data((s, a.detach(), r*config["reward_scale"], s_prime, prob_a.detach(), done))
+                s = s_prime
 
-            score += r
-            
-            done = done.all() if isinstance(done, torch.Tensor) else done
-            if done:
-                run.log({"t_end/T_horizon": t/config["T_horizon"]})
-                break
+                score += r
+                
+                done = done.all() if isinstance(done, torch.Tensor) else done
+                if done:
+                    run.log({"t_end/T_horizon": t/config["T_horizon"]})
+                    break
 
         model.train_net()
 
