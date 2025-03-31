@@ -91,6 +91,11 @@ class PPO(nn.Module):
         r = torch.stack(r_lst).transpose(1,0)
         s_prime = torch.stack(s_prime_lst).transpose(0,1)# * done_mask
         prob_a = torch.stack(prob_a_lst).transpose(1,0)# * done_mask
+        
+        # reward is still defined at the first done timestep
+        # but anything more than that is invalid
+        if r.unsqueeze(-1).masked_select(done_mask).sum() > r.shape[0]:
+            print("\033[33mwarning: Detected rewards for invalid timesteps\033[0m")
 
         ret = (s, a, r, s_prime, done_mask, prob_a)
         ret = (x.detach() for x in ret)

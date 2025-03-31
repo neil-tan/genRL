@@ -80,6 +80,8 @@ class GenCartPoleDummyBase(gym.Env):
         assert action.dtype == torch.int64, f"action dtype {action.dtype} is not valid"
 
         done = self._is_done()
+        assert done.shape == (self.num_envs, 1), f"done shape {done.shape} is not valid"
+        assert done.dtype == torch.bool, f"done dtype {done.dtype} is not valid"
         # reward is 1 timestep behind because it is not returned during reset() unlike states
         reward_timestep = self.current_timestep - 1
         if reward_timestep < 0 or reward_timestep >= self.rewards.shape[0]:
@@ -158,7 +160,7 @@ class GenCartPoleDummyInverseTrig(GenCartPoleDummyBase):
     
     def _is_done(self):
         if self.current_timestep >= self.episode_length - 1:
-            return torch.ones((self.num_envs), dtype=torch.bool)
+            return torch.ones((self.num_envs, 1), dtype=torch.bool)
 
         current_mask = self.inverse_trig_mask[:, self.current_timestep]
         next_mask = self.inverse_trig_mask[:, self.current_timestep + 1] if self.current_timestep < self.episode_length - 1 else torch.zeros_like(current_mask)
@@ -166,6 +168,7 @@ class GenCartPoleDummyInverseTrig(GenCartPoleDummyBase):
         for i in range(self.num_envs):
             if current_mask[i] and not next_mask[i]:
                 done[i:] = True
+        done = done.unsqueeze(-1)
         return done
     
     @torch.no_grad()

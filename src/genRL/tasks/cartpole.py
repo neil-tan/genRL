@@ -1,5 +1,6 @@
 import genRL.gym_envs.genesis.cartpole
 import genRL.gym_envs.test_envs.cartpole_dummy
+from genRL.utils import is_cuda_available
 import gymnasium as gym
 import torch
 import torch.nn.functional as F
@@ -150,7 +151,7 @@ def objective(trial,
                    return_tensor=True,
                    wandb_video_steps=config["wandb_video_steps"],
                    logging_level="warning", # "info", "warning", "error", "debug"
-                   gs_backend=gs.cpu,
+                   gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
                    seed=config["random_seed"],
                    )
     

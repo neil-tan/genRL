@@ -123,3 +123,7 @@ def wandb_save_study(study, total_trials_completed, project_name, study_name):
         "total_trials_completed" : total_trials_completed,
     }
     save_tune_session(session_info, project_name, study_name)
+    
+def is_cuda_available():
+    import torch
+    return torch.cuda.is_available()
