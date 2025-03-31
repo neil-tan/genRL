@@ -8,6 +8,7 @@ import pickle
 import os
 import re
 import optuna
+import functools
 
 def masked_mean(x, mask):
     return (x * mask).sum() / max(mask.sum(), 1)
@@ -127,3 +128,43 @@ def wandb_save_study(study, total_trials_completed, project_name, study_name):
 def is_cuda_available():
     import torch
     return torch.cuda.is_available()
+
+def to_device(device):
+    """
+    Decorator that moves the return value of a function to a specific device.
+    
+    Args:
+        device: The target device (e.g., 'cuda', 'cuda:0', 'cpu')
+    
+    Returns:
+        Decorator function that wraps the original function
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            result = func(*args, **kwargs)
+            return move_to_device(result, device)
+        return wrapper
+    return decorator
+
+def move_to_device(obj, device):
+    """
+    Recursively moves an object and all its tensor contents to the specified device.
+    
+    Args:
+        obj: The object to move (tensor, module, list, tuple, dict, etc.)
+        device: The target device
+        
+    Returns:
+        The same object structure with all tensors moved to the target device
+    """
+    if hasattr(obj, 'to') and callable(obj.to):
+        return obj.to(device)
+    elif isinstance(obj, dict):
+        return {k: move_to_device(v, device) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [move_to_device(v, device) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(move_to_device(v, device) for v in obj)
+    else:
+        return obj

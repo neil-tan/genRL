@@ -13,6 +13,7 @@ class GenCartPoleDummyBase(gym.Env):
                  ):
         self.num_envs = num_envs
         self.return_tensor = True
+        self.device = "cpu"
 
         self.x_threshold = 2.4
         self.theta_threshold_degrees = 12

@@ -29,8 +29,7 @@ def main():
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                #    num_envs=config["num_envs"],
-                   num_envs=3,
+                   num_envs=config["num_envs"],
                    return_tensor=True,
                    wandb_video_steps=config["wandb_video_steps"],
                    logging_level="warning", # "info", "warning", "error", "debug"

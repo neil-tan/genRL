@@ -67,6 +67,8 @@ def get_config(trial, fast_dev_run=False, **kwargs):
 
 
 def training_loop(env, config, run=None, epi_callback=None, compile=False):
+    device = env.unwrapped.device
+    
     pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
     v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
 
@@ -76,11 +78,11 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
         wandb.init(project="cartpole_ppo", config=config)
         run = wandb.run
 
-    model = PPO(pi=pi, v=v, wandb_run=run, **config)
+    model = PPO(pi=pi, v=v, wandb_run=run, **config).to(device)
     if compile:
         model.compile()
     
-    score = 0.0
+    score = torch.zeros(config["num_envs"], device=device)
     report_interval = min(20, config["n_epi"]-1)
     interval_mean_score = None
 
@@ -112,7 +114,7 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
             interval_score = (score/report_interval)
             interval_mean_score = (score/report_interval).mean()
             epi_bar.write(f"n_epi: {n_epi}, score: {interval_mean_score}")
-            run.log({"rewards histo": wandb.Histogram(interval_score), "mean reward": interval_mean_score})
+            run.log({"rewards histo": wandb.Histogram(interval_score.cpu()), "mean reward": interval_mean_score.cpu()})
             if epi_callback is not None:
                 epi_callback(n_epi, interval_mean_score)
             score = 0.0
