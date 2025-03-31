@@ -9,7 +9,7 @@ from genRL.utils import wandb_load_study, wandb_save_study
 
 def main():
     prune_patience = 3
-    project_name = "genRL_cartpole_ppo_tune_test_env"
+    project_name = "genRL_cartpole_ppo_tune_gpu"
     study_name="ppo_cartpole"
     fast_dev_run = False
     save_every_n_iters = 3

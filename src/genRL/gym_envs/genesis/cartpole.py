@@ -7,7 +7,7 @@ from gymnasium import spaces
 import torch
 import wandb
 import tempfile
-from genRL.utils import downsample_list_image_to_video_array
+from genRL.utils import downsample_list_image_to_video_array, move_to_device
 # %%
 class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
@@ -37,8 +37,9 @@ class GenCartPoleEnv(gym.Env):
         self.max_force = max_force
         self.step_scaler = step_scaler
         self.current_steps_count = 0
+        self.device = "cpu" if gs_backend == gs.cpu else "cuda"
 
-        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool)
+        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool, device=self.device)
 
         # [Cart Position, Cart Velocity, Pole Angle (rad), Pole Velocity]
         self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
@@ -142,8 +143,8 @@ class GenCartPoleEnv(gym.Env):
         
         # if self.num_envs == 1 and not self.return_tensor:
         #     return position_failed or angle_failed
-        
-        return torch.logical_or(position_failed, angle_failed)
+
+        return torch.logical_or(position_failed, angle_failed).to(self.device)
 
     def _step_simulation(self):
         self.scene.step()
@@ -159,7 +160,7 @@ class GenCartPoleEnv(gym.Env):
         self._seed = seed
         self._options = options
         self.current_steps_count = 0
-        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool)
+        self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool, device=self.device)
 
         self.scene.reset(self._init_state)
         
