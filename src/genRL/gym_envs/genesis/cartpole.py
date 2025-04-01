@@ -56,6 +56,8 @@ class GenCartPoleEnv(gym.Env):
         print(f"Temp video dir: {self._temp_video_dir}")
         
         ### simulator setup
+        if gs._initialized:
+            gs.destroy() # work around for genesis fail to destroy
         gs.init(backend=gs_backend,
                 seed=seed,
                 logging_level=logging_level)

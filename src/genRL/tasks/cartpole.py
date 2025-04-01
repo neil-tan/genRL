@@ -39,8 +39,8 @@ torch.manual_seed(config["random_seed"])
 
 def get_config(trial, fast_dev_run=False, **kwargs):
     config = {
-        "learning_rate": trial.suggest_loguniform("learning_rate", 5e-5, 1e-2),
-        "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 8, 10, 16]),
+        "learning_rate": trial.suggest_loguniform("learning_rate", 5e-4, 1e-2),
+        "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 10]),
         "weight_decay": trial.suggest_loguniform("weight_decay", 1e-5, 1e-3),
         "gamma": trial.suggest_uniform("gamma", 0.98, 0.999),
         "lmbda": trial.suggest_uniform("lmbda", 0.98, 0.999),
@@ -68,8 +68,8 @@ def get_config(trial, fast_dev_run=False, **kwargs):
 def training_loop(env, config, run=None, epi_callback=None, compile=False):
     device = env.unwrapped.device
     
-    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2, activation=F.tanh)
-    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1, activation=F.tanh)
+    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
+    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
 
     if run is not None:
         wandb.watch([pi, v], log="all")
