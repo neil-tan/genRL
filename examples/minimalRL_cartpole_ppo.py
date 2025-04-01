@@ -23,7 +23,7 @@ def main():
                 )
 
     config["normalize_advantage"] = False
-    config["num_envs"] = 1
+    config["num_envs"] = 8
     env = gym.make("GenCartPole-v0",
     # env = gym.make("GenCartPole-v0-dummy-ones",
     # env = gym.make("GenCartPole-dummy_inverse_trig-v0",

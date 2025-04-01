@@ -250,11 +250,15 @@ class GenCartPoleEnv(gym.Env):
             print(f"Cart Position: {obs[0]}; Pole Angle: {obs[2]}")
     
     def close(self):
-        self._stop_viewer()
-        self._stop_recording()
-        if self._temp_video_dir is not None:
-            self._temp_video_dir.cleanup()
-        gs.destroy()
+        try:
+            self._stop_viewer()
+            self._stop_recording()
+            if self._temp_video_dir is not None:
+                self._temp_video_dir.cleanup()
+        except Exception as e:
+            print(f"Failed to clean up Environment: {e}")
+        finally:
+            gs.destroy()
     
     def __del__(self):
         if gs._initialized:
