@@ -132,7 +132,7 @@ class PPO(nn.Module):
             ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
 
             surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip)
+            surr2 = torch.clamp(ratio, 1-self.eps_clip, 1+self.eps_clip) * advantages
 
             policy_loss = -torch.min(surr1, surr2).masked_select(valid_mask).mean()
                         

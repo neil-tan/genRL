@@ -10,7 +10,7 @@ from genRL.utils import wandb_load_study, wandb_save_study
 def main():
     prune_patience = 3
     project_name = "genRL_cartpole_ppo_tune_gpu"
-    study_name="gs_workd_around"
+    study_name="ppo_surr2_fix"
     fast_dev_run = False
     save_every_n_iters = 3
     n_trials = 200
@@ -40,6 +40,7 @@ def main():
         # this will run objective function n_trials times
         study.optimize(partial(objective,
                                 project_name=project_name,
+                                run_name=f"{study_name}_{total_trials_completed}",
                                 fast_dev_run=fast_dev_run,
                                 n_epi=n_epi, # this overrides config
                                 ),
