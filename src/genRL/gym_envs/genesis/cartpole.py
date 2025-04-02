@@ -253,7 +253,7 @@ class GenCartPoleEnv(gym.Env):
     
     def close(self):
         try:
-            self._stop_viewer()
+            # self._stop_viewer()
             self._stop_recording()
             if self._temp_video_dir is not None:
                 self._temp_video_dir.cleanup()
@@ -294,10 +294,10 @@ class GenCartPoleEnv(gym.Env):
         
         self.cam.stop_recording(save_to_filename=video_path)
     
-    def _stop_viewer(self):
-        # self.scene._visualizer._viewer
-        if self.scene.viewer and self.scene.viewer.is_alive():
-            self.scene.viewer.stop()
+    # def _stop_viewer(self):
+    #     # self.scene._visualizer._viewer
+    #     if self.scene.viewer and self.scene.viewer.is_alive():
+    #         self.scene.viewer.stop()
 
 
 custom_environment_spec = gym.register(id='GenCartPole-v0', 
