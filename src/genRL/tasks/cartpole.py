@@ -16,20 +16,20 @@ import optuna
 #Hyperparameters
 # Hyperparameters as a dictionary
 config = {
-    "K_epoch": 10,
-    "learning_rate": 0.001,
-    "weight_decay": 0.000045,
-    "gamma": 0.98,
-    "lmbda": 0.985,
-    "entropy_coef": 0.0000095,
-    "value_loss_coef": 0.865,
-    "normalize_advantage": True,
-    "max_grad_norm": 0.3,
-    "eps_clip": 0.065,
+    "K_epoch": 5,
+    "learning_rate": 0.005130725958237767,
+    "weight_decay": 0.0000412466254419299,
+    "gamma": 0.9905071774348913,
+    "lmbda": 0.9976561907716108,
+    "entropy_coef": 0.0005284384205738843,
+    "value_loss_coef": 0.9860861577557356,
+    "normalize_advantage": True, # False as per hyperparameter tuning
+    "max_grad_norm": 0.2176673586491956,
+    "eps_clip": 0.07871516144902298,
     "T_horizon": 1500,
     "random_seed": 42,
-    "num_envs": 16,
-    "reward_scale": 0.08,
+    "num_envs": 32,
+    "reward_scale": 0.011391114825757769,
     "n_epi": 10000,
     "wandb_video_steps": 1500,
 }

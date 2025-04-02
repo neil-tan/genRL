@@ -94,7 +94,7 @@ class PPO(nn.Module):
         
         # reward is still defined at the first done timestep
         # but anything more than that is invalid
-        if r.unsqueeze(-1).masked_select(done_mask).sum() > r.shape[0]:
+        if torch.count_nonzero(r[:,1:].unsqueeze(-1).masked_select(done_mask[:,0:-1,:])) > 0:
             print("\033[33mwarning: Detected rewards for invalid timesteps\033[0m")
 
         ret = (s, a, r, s_prime, done_mask, prob_a)
