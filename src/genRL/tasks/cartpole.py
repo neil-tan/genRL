@@ -17,7 +17,7 @@ from dataclasses import replace, asdict
 np.random.seed(PPOConfig.random_seed)
 torch.manual_seed(PPOConfig.random_seed)
 
-def config_ppo_search_space(trial, config:PPOConfig, fast_dev_run=False, **kwargs):
+def config_ppo_search_space(trial, config:PPOConfig):
     search_space = {
         "learning_rate": trial.suggest_loguniform("learning_rate", 1e-3, 1e-2),
         "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 8, 16]),
@@ -33,11 +33,8 @@ def config_ppo_search_space(trial, config:PPOConfig, fast_dev_run=False, **kwarg
         "reward_scale": trial.suggest_uniform("reward_scale", 0.01, 0.05),
     }
     
-    replace(config, **search_space)
-    replace(config, **kwargs)
+    config = replace(config, **search_space)
 
-    if fast_dev_run:
-        replace(config, n_epi=8, T_horizon=200, wandb_video_steps=20, num_envs=2)
     return config
 
 
@@ -100,9 +97,12 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
 def objective(trial,
               run_name,
               session_config,
-              **kwargs):
+              ):
 
-    ppo_config = config_ppo_search_space(trial, config=session_config.ppo, fast_dev_run=session_config.fast_dev_run, **kwargs)
+    ppo_config = config_ppo_search_space(trial, config=session_config.ppo)
+    
+    if session_config.fast_dev_run:
+        ppo_config = replace(ppo_config, n_epi=8, T_horizon=200, wandb_video_steps=20, num_envs=2)
 
     def epi_callback(n_epi, average_score):
         trial.report(average_score, n_epi)

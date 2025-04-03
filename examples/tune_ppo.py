@@ -12,7 +12,7 @@ import OpenGL
 
 '''
 run with:
-python examples/tune_ppo.py --project_name genRL_cartpole_tune --ppo.n_epi 500 --tune.n_trials 100
+python examples/tune_ppo.py --project_name genRL_cartpole_tune --ppo.n_epi 250 --tune.n_trials 100
 '''
 
 def main():
