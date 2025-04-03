@@ -20,18 +20,18 @@ torch.manual_seed(PPOConfig.random_seed)
 def get_config(trial, fast_dev_run=False, **kwargs):
     config = PPOConfig()
     search_space = {
-        "learning_rate": trial.suggest_loguniform("learning_rate", 5e-4, 1e-2),
-        "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 10]),
-        "weight_decay": trial.suggest_loguniform("weight_decay", 1e-5, 1e-3),
-        "gamma": trial.suggest_uniform("gamma", 0.98, 0.999),
-        "lmbda": trial.suggest_uniform("lmbda", 0.98, 0.999),
-        "entropy_coef": trial.suggest_loguniform("entropy_coef", 1e-6, 1e-3),
-        "value_loss_coef": trial.suggest_uniform("value_loss_coef", 0.5, 1.0),
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-3, 1e-2),
+        "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 8, 16]),
+        "weight_decay": trial.suggest_loguniform("weight_decay", 1e-6, 1e-4),
+        "gamma": trial.suggest_uniform("gamma", 0.985, 0.999),
+        "lmbda": trial.suggest_uniform("lmbda", 0.985, 0.999),
+        "entropy_coef": trial.suggest_loguniform("entropy_coef", 1e-3, 1e-2),
+        "value_loss_coef": trial.suggest_uniform("value_loss_coef", 0.8, 1.0),
         "normalize_advantage": trial.suggest_categorical("normalize_advantage", [True, False]),
         "max_grad_norm": trial.suggest_uniform("max_grad_norm", 0.1, 0.5),
-        "eps_clip": trial.suggest_uniform("eps_clip", 0.05, 0.2),
-        "num_envs": trial.suggest_categorical("num_envs", [1, 8, 32]),
-        "reward_scale": trial.suggest_uniform("reward_scale", 0.01, 0.1),
+        "eps_clip": trial.suggest_uniform("eps_clip", 0.05, 0.15),
+        "num_envs": trial.suggest_categorical("num_envs", [1, 8, 32, 64]),
+        "reward_scale": trial.suggest_uniform("reward_scale", 0.01, 0.05),
     }
     
     replace(config, **search_space)

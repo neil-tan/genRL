@@ -27,13 +27,11 @@ class OptunaConfig:
     save_every_n_iters: int = 3
     n_trials: int = 200
     n_jobs: int = 1
-    n_epi: int = 800
     
 @dataclass
 class SessionConfig:
     project_name: str
     run_name: str
-    n_epi: int
     wandb_video_steps: int
     fast_dev_run: bool = False
     ppo: PPOConfig = field(default_factory=PPOConfig)

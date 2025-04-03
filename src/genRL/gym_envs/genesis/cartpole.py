@@ -66,7 +66,7 @@ class GenCartPoleEnv(gym.Env):
             show_viewer = self.render_mode == "human",
             viewer_options = gs.options.ViewerOptions(
                 res           = (2048, 960),
-                camera_pos    = (0.0, 8, 0.5),
+                camera_pos    = (0.0, 16, 4),
                 camera_lookat = (0.0, 0.0, 3),
                 camera_fov    = 60,
                 max_FPS       = self.metadata["render_fps"],
@@ -95,9 +95,9 @@ class GenCartPoleEnv(gym.Env):
         
         self.cam = self.scene.add_camera(
             res    = (1024, 480),
-            pos    = (0.0, 16, 0.5),
+            pos    = (0.0, 16, 4),
             lookat = (0.0, 0.0, 3),
-            fov    = 65,
+            fov    = 60,
             GUI    = False,
         )
 

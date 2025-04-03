@@ -10,20 +10,25 @@ import tyro
 from genRL.configs import PPOConfig, SessionConfig, OptunaConfig
 import OpenGL
 
+'''
+run with:
+python examples/tune_ppo.py --project_name genRL_cartpole_tune --ppo.n_epi 10000 --tune.n_trials 100
+'''
 
-# run with: python examples/tune_ppo.py --tune.study_name ppo_surr2_fix 
 def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
                     project_name="genRL_cartpole_ppo_tune_gpu",
                     run_name="cartpole",
-                    n_epi=10000,
                     wandb_video_steps=2000,
-                    tune=OptunaConfig(prune_patience=5, n_trials=200, save_every_n_iters=4),
+                    ppo=PPOConfig(n_epi=10000),
+                    tune=OptunaConfig(prune_patience=5, n_trials=100),
                 ),
                 description="Minimal RL PPO Cartpole Hyperparameter tuning example",
             )
+    
+    assert args.tune.n_jobs == 1, "n_jobs > 1 is not supported yet"
 
     study_name = args.tune.study_name
     save_every_n_iters = args.tune.save_every_n_iters
