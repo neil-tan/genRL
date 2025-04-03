@@ -4,25 +4,15 @@ from genRL.utils import is_cuda_available
 import gymnasium as gym
 import torch
 import torch.nn.functional as F
-from torch.distributions import Categorical
-from genRL.rl.ppo import PPOConfig
+from genRL.configs import PPOConfig
 import genesis as gs
 import sys
 import numpy as np
 import wandb
-from tqdm import trange
 from genRL.tasks.cartpole import training_loop
 from genesis.utils.misc import get_platform
-import dataclasses
 import tyro
-
-@dataclasses.dataclass
-class SessionConfig:
-    project_name: str
-    run_name: str
-    n_epi: int
-    wandb_video_steps: int
-    ppo: PPOConfig
+from genRL.utils import SessionConfig
 
 def main():
     args = tyro.cli(

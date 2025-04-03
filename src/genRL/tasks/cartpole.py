@@ -99,12 +99,11 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
     return interval_mean_score
 
 def objective(trial,
-              project_name,
-              run_name="cartpole",
-              fast_dev_run=False,
+              run_name,
+              session_config,
               **kwargs):
 
-    config = get_config(trial, fast_dev_run=fast_dev_run, **kwargs)
+    ppo_config = get_config(trial, fast_dev_run=session_config.fast_dev_run, **kwargs)
 
     def epi_callback(n_epi, average_score):
         trial.report(average_score, n_epi)
@@ -115,9 +114,9 @@ def objective(trial,
             raise optuna.exceptions.TrialPruned()
     
     run = wandb.init(
-                    project=project_name,
+                    project=session_config.project_name,
                     name=run_name,
-                    config=asdict(config),
+                    config=asdict(ppo_config),
                     reinit=True,
                     # mode="disabled", # dev dry-run
                 )
@@ -126,17 +125,17 @@ def objective(trial,
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                   num_envs=config.num_envs,
+                   num_envs=ppo_config.num_envs,
                    return_tensor=True,
-                   wandb_video_steps=config.wandb_video_steps,
+                   wandb_video_steps=ppo_config.wandb_video_steps,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=config.random_seed,
+                   seed=ppo_config.random_seed,
                    )
     
     env.reset()
     
-    result = training_loop(env, config, run, epi_callback, compile=True)
+    result = training_loop(env, ppo_config, run, epi_callback, compile=True)
 
     env.render()
     env.close()
