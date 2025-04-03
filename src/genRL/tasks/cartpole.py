@@ -5,40 +5,21 @@ import gymnasium as gym
 import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
-from genRL.rl.ppo import PPO, SimpleMLP
+from genRL.rl.ppo import PPO, SimpleMLP, PPOConfig
 import genesis as gs
 import sys
 import numpy as np
 import wandb
 from tqdm import trange
 import optuna
+from dataclasses import replace, asdict
 
-#Hyperparameters
-# Hyperparameters as a dictionary
-config = {
-    "K_epoch": 5,
-    "learning_rate": 0.005130725958237767,
-    "weight_decay": 0.0000412466254419299,
-    "gamma": 0.9905071774348913,
-    "lmbda": 0.9976561907716108,
-    "entropy_coef": 0.0005284384205738843,
-    "value_loss_coef": 0.9860861577557356,
-    "normalize_advantage": True, # False as per hyperparameter tuning
-    "max_grad_norm": 0.2176673586491956,
-    "eps_clip": 0.07871516144902298,
-    "T_horizon": 1500,
-    "random_seed": 42,
-    "num_envs": 32,
-    "reward_scale": 0.011391114825757769,
-    "n_epi": 10000,
-    "wandb_video_steps": 1500,
-}
-
-np.random.seed(config["random_seed"])
-torch.manual_seed(config["random_seed"])
+np.random.seed(PPOConfig.random_seed)
+torch.manual_seed(PPOConfig.random_seed)
 
 def get_config(trial, fast_dev_run=False, **kwargs):
-    config = {
+    config = PPOConfig()
+    search_space = {
         "learning_rate": trial.suggest_loguniform("learning_rate", 5e-4, 1e-2),
         "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 10]),
         "weight_decay": trial.suggest_loguniform("weight_decay", 1e-5, 1e-3),
@@ -49,19 +30,15 @@ def get_config(trial, fast_dev_run=False, **kwargs):
         "normalize_advantage": trial.suggest_categorical("normalize_advantage", [True, False]),
         "max_grad_norm": trial.suggest_uniform("max_grad_norm", 0.1, 0.5),
         "eps_clip": trial.suggest_uniform("eps_clip", 0.05, 0.2),
-        "T_horizon": 1500,
-        "random_seed": 42,
         "num_envs": trial.suggest_categorical("num_envs", [1, 8, 32]),
         "reward_scale": trial.suggest_uniform("reward_scale", 0.01, 0.1),
-        "n_epi": 15000,
-        "wandb_video_steps": 2000,
     }
     
-    config.update(kwargs)
+    replace(config, **search_space)
+    replace(config, **kwargs)
 
     if fast_dev_run:
-        config["n_epi"] = 8
-        config["wandb_video_steps"] = 20
+        replace(config, n_epi=8, T_horizon=200, wandb_video_steps=20, num_envs=2)
     return config
 
 
@@ -77,35 +54,35 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
         wandb.init(project="cartpole_ppo", config=config)
         run = wandb.run
 
-    model = PPO(pi=pi, v=v, wandb_run=run, **config).to(device)
+    model = PPO(pi=pi, v=v, wandb_run=run, config=config).to(device)
     if compile:
         model.compile()
     
-    score = torch.zeros(config["num_envs"], device=device)
-    report_interval = min(20, config["n_epi"]-1)
+    score = torch.zeros(config.num_envs, device=device)
+    report_interval = min(20, config.n_epi-1)
     interval_mean_score = None
 
-    epi_bar = trange(config["n_epi"], desc="n_epi")
+    epi_bar = trange(config.n_epi, desc="n_epi")
     for n_epi in epi_bar:
         s, _ = env.reset()
         done = False
 
         with torch.no_grad():
-            for t in trange(config["T_horizon"], desc="env", leave=False):
+            for t in trange(config.T_horizon, desc="env", leave=False):
                 prob = model.pi(s)
                 m = Categorical(prob)
                 a = m.sample().unsqueeze(-1)
                 s_prime, r, done, truncated, info = env.step(a)
 
                 prob_a = torch.gather(prob, -1, a)
-                model.put_data((s, a.detach(), r*config["reward_scale"], s_prime, prob_a.detach(), done))
+                model.put_data((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
                 s = s_prime
 
                 score += r
                 
                 done = done.all() if isinstance(done, torch.Tensor) else done
                 if done:
-                    run.log({"t_end/T_horizon": t/config["T_horizon"]})
+                    run.log({"t_end/T_horizon": t/config.T_horizon})
                     break
 
         model.train_net()
@@ -140,7 +117,7 @@ def objective(trial,
     run = wandb.init(
                     project=project_name,
                     name=run_name,
-                    config=config,
+                    config=asdict(config),
                     reinit=True,
                     # mode="disabled", # dev dry-run
                 )
@@ -149,12 +126,12 @@ def objective(trial,
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                   num_envs=config["num_envs"],
+                   num_envs=config.num_envs,
                    return_tensor=True,
-                   wandb_video_steps=config["wandb_video_steps"],
+                   wandb_video_steps=config.wandb_video_steps,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=config["random_seed"],
+                   seed=config.random_seed,
                    )
     
     env.reset()

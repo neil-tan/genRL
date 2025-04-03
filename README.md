@@ -1,5 +1,3 @@
-
-
 ## Installation
 Please stick to the Miniconda installation for now. Pyenv is not working on Mac.
 - Install dependencies with [Homebrew](https://brew.sh/)
@@ -28,9 +26,25 @@ conda config --set auto_activate_base <TRUE_OR_FALSE>
 ```
 - Create a new conda environment and install dependencies
 ```bash
-conda create --name genRL python=3.10 -y
+conda create --name genRL python=3.12 -y
 conda activate genRL
 pip install -e .
+```
+
+#### Managing Conda Environments
+- List all conda environments
+```bash
+conda env list
+```
+- Remove a conda environment (Note: you cannot use pyenv to remove conda environments)
+```bash
+conda remove --name environment_name --all
+```
+- For environments in non-standard locations (like miniconda-latest/envs/gr00t-test), use:
+```bash
+conda env remove -p path/to/environment
+# Example:
+# conda env remove -p ~/miniconda-latest/envs/gr00t-test
 ```
 
 ### Pyenv
