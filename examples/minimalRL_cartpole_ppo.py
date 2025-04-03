@@ -12,7 +12,7 @@ import wandb
 from genRL.tasks.cartpole import training_loop
 from genesis.utils.misc import get_platform
 import tyro
-from genRL.utils import SessionConfig
+from genRL.configs import SessionConfig
 
 def main():
     args = tyro.cli(
@@ -20,9 +20,8 @@ def main():
                 default=SessionConfig(
                     project_name="genRL_cartpole_ppo",
                     run_name="cartpole",
-                    n_epi=10000,
                     wandb_video_steps=2000,
-                    ppo=PPOConfig(normalize_advantage=False, num_envs=8),
+                    ppo=PPOConfig(normalize_advantage=False, num_envs=8, n_epi=1000),
                 ),
                 description="Minimal RL PPO Cartpole example",
             )

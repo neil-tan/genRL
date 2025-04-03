@@ -3,19 +3,19 @@ from dataclasses import dataclass, field
 @dataclass
 class PPOConfig:
     K_epoch: int = 5
-    learning_rate: float = 0.005130725958237767
-    weight_decay: float = 0.0000412466254419299
-    gamma: float = 0.9905071774348913
-    lmbda: float = 0.9976561907716108
-    entropy_coef: float = 0.0005284384205738843
-    value_loss_coef: float = 0.9860861577557356
+    learning_rate: float = 0.005
+    weight_decay: float = 0.00003
+    gamma: float = 0.99
+    lmbda: float = 0.998
+    entropy_coef: float = 0.001
+    value_loss_coef: float = 1
     normalize_advantage: bool = True
-    max_grad_norm: float = 0.2176673586491956
-    eps_clip: float = 0.07871516144902298
+    max_grad_norm: float = 0.2
+    eps_clip: float = 0.08
     T_horizon: int = 1500
     random_seed: int = 42
     num_envs: int = 32
-    reward_scale: float = 0.011391114825757769
+    reward_scale: float = 0.015
     n_epi: int = 10000
     wandb_video_steps: int = 2000
 

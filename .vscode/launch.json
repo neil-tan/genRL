@@ -10,7 +10,9 @@
             "request": "launch",
             "program": "${file}",
             "justMyCode": false,
-            // "args": ["-v"]
+            "args": "${command:pickArgs}"
         }
+        },
+        
     ]
 }

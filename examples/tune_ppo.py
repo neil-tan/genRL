@@ -12,7 +12,7 @@ import OpenGL
 
 '''
 run with:
-python examples/tune_ppo.py --project_name genRL_cartpole_tune --ppo.n_epi 10000 --tune.n_trials 100
+python examples/tune_ppo.py --project_name genRL_cartpole_tune --ppo.n_epi 500 --tune.n_trials 100
 '''
 
 def main():
@@ -22,7 +22,7 @@ def main():
                     project_name="genRL_cartpole_ppo_tune_gpu",
                     run_name="cartpole",
                     wandb_video_steps=2000,
-                    ppo=PPOConfig(n_epi=10000),
+                    ppo=PPOConfig(n_epi=1000),
                     tune=OptunaConfig(prune_patience=5, n_trials=100),
                 ),
                 description="Minimal RL PPO Cartpole Hyperparameter tuning example",

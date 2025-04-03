@@ -17,8 +17,7 @@ from dataclasses import replace, asdict
 np.random.seed(PPOConfig.random_seed)
 torch.manual_seed(PPOConfig.random_seed)
 
-def get_config(trial, fast_dev_run=False, **kwargs):
-    config = PPOConfig()
+def config_ppo_search_space(trial, config:PPOConfig, fast_dev_run=False, **kwargs):
     search_space = {
         "learning_rate": trial.suggest_loguniform("learning_rate", 1e-3, 1e-2),
         "K_epoch": trial.suggest_categorical("K_epoch", [3, 5, 8, 16]),
@@ -103,7 +102,7 @@ def objective(trial,
               session_config,
               **kwargs):
 
-    ppo_config = get_config(trial, fast_dev_run=session_config.fast_dev_run, **kwargs)
+    ppo_config = config_ppo_search_space(trial, config=session_config.ppo, fast_dev_run=session_config.fast_dev_run, **kwargs)
 
     def epi_callback(n_epi, average_score):
         trial.report(average_score, n_epi)
