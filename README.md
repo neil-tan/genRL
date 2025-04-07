@@ -1,39 +1,33 @@
 [![bMQUG.gif](https://s6.gifyu.com/images/bMQUG.gif)](https://wandb.ai/neiltan/genRL_cartpole_tune/runs/vcotwkym?nw=nwuserneiltan)
 
 ## Installation
+Install the prerequisites, create a virtual environment using minconda and pyenv. Click on the tabs below to see the instructions for your OS.
+<details>
+  <summary>Linux</summary>
 We will install Miniconda as a part of Pyenv, and create a virtual environment for the package.
-### Install dependencies
-#### Ubuntu
+
+#### Install dependencies
+
 ```bash
 sudo apt-get update
 sudo apt install ffmpeg openssl libreadline-dev libsqlite3-dev xz-utils zlib1g-dev tcl-tk tcl-dev tk-dev
 ```
 
-#### MacOS
-```bash 
-brew update
-brew install ffmpeg openssl readline sqlite3 xz zlib tcl-tk
-```
+#### Install [Pyenv](https://github.com/pyenv/pyenv)
 
-### Install [Pyenv](https://github.com/pyenv/pyenv)
-
-#### Linux
 ```bash
 curl -fsSL https://pyenv.run | bash
 ```
-#### MacOS
-```bash
-brew install pyenv
-```
+
 Follow the [instructions here](https://github.com/pyenv/pyenv?tab=readme-ov-file#b-set-up-your-shell-environment-for-pyenv) to add pyenv to your shell profile. 
 
-Reload your shelldef or restart your terminal
+Reload your shelldef or restart your terminal.
 ```bash
 exec "$SHELL"
 ```
 
-### Miniconda
-#### Linux
+
+#### Miniconda
 Identify a version of miniconda that you'd like to install. The latest version is recommended.
 ```bash
 # Check the latest version of Miniconda 
@@ -50,7 +44,28 @@ pyenv activate genrl
 # to install python 3.12, run:
 # conda install python=3.12
 ```
-#### MacOS
+</details>
+
+<details>
+  <summary>MacOS</summary>
+
+#### Install dependencies
+```bash 
+brew update
+brew install ffmpeg openssl readline sqlite3 xz zlib tcl-tk
+```
+#### Install [Pyenv](https://github.com/pyenv/pyenv)
+```bash
+brew install pyenv
+```
+Follow the [instructions here](https://github.com/pyenv/pyenv?tab=readme-ov-file#b-set-up-your-shell-environment-for-pyenv) to add pyenv to your shell profile. 
+
+Reload your shelldef or restart your terminal
+```bash
+exec "$SHELL"
+```
+#### Miniconda
+
 The Miniconda package isn't available on Pyenv for MacOS, so we will install it manually.
 - Install [Miniconda](https://docs.anaconda.com/miniconda/install)
 ```bash
@@ -74,6 +89,8 @@ conda config --set auto_activate_base <TRUE_OR_FALSE>
 conda create --name genRL python=3.12 -y
 conda activate genRL
 ```
+
+</details>
 
 ### Install the package
 ```bash
