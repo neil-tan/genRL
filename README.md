@@ -55,7 +55,6 @@ pip install -e .
 ### Run Example
 A simple Cartpole PPO example:
 ```bash
-conda activate genRL
 python examples/minimalRL_cartpole_ppo.py
 ```
 

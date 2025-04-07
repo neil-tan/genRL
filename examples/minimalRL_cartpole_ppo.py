@@ -21,7 +21,7 @@ def main():
                     project_name="genRL_cartpole_ppo",
                     run_name="cartpole",
                     wandb_video_steps=2000,
-                    ppo=PPOConfig(normalize_advantage=False, num_envs=8, n_epi=1000),
+                    ppo=PPOConfig(num_envs=8, n_epi=180),
                 ),
                 description="Minimal RL PPO Cartpole example",
             )
@@ -31,11 +31,9 @@ def main():
     run = wandb.init(
                     project=args.project_name,
                     name=args.run_name,
-                    config=args.ppo,
+                    config=config,
                     # mode="disabled", # dev dry-run
                 )
-
-    config = PPOConfig(normalize_advantage=False, num_envs=8)
 
     env = gym.make("GenCartPole-v0",
     # env = gym.make("GenCartPole-v0-dummy-ones",
