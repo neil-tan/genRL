@@ -257,10 +257,12 @@ class GenCartPoleEnv(gym.Env):
             self._stop_recording()
             if self._temp_video_dir is not None:
                 self._temp_video_dir.cleanup()
+            gs.destroy()
+        except AttributeError as e:
+            print(f"Failed to close Environment: {e}")
         except Exception as e:
             print(f"Failed to clean up Environment: {e}")
-        finally:
-            gs.destroy()
+            
     
     def __del__(self):
         if gs._initialized:
