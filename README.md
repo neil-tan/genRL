@@ -16,6 +16,12 @@ brew install ffmpeg openssl readline sqlite3 xz zlib tcl-tk
 ```
 
 ### Install [Pyenv](https://github.com/pyenv/pyenv)
+
+#### Linux
+```bash
+curl -fsSL https://pyenv.run | bash
+```
+#### MacOS
 ```bash
 brew install pyenv
 ```
@@ -27,6 +33,7 @@ exec "$SHELL"
 ```
 
 ### Miniconda
+#### Linux
 Identify a version of miniconda that you'd like to install. The latest version is recommended.
 ```bash
 # Check the latest version of Miniconda 
@@ -42,6 +49,30 @@ pyenv virtualenv miniconda3-4.7.12 genrl
 pyenv activate genrl
 # to install python 3.12, run:
 # conda install python=3.12
+```
+#### MacOS
+The Miniconda package isn't available on Pyenv for MacOS, so we will install it manually.
+- Install [Miniconda](https://docs.anaconda.com/miniconda/install)
+```bash
+mkdir -p ~/miniconda3
+curl https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh
+```
+- Ensure Miniconda is in your PATH
+```bash
+# Replace <PATH-TO-CONDA> with the file path to your conda installation
+# <PATH-TO-CONDA>/bin/conda init zsh
+~/minianaconda3/bin/conda init zsh
+```
+- If you have Pyenv on your system, it's a good idea to set conda auto-activate to false
+```bash
+conda config --set auto_activate_base <TRUE_OR_FALSE>
+```
+- Create a new conda environment and install dependencies
+```bash
+conda create --name genRL python=3.12 -y
+conda activate genRL
 ```
 
 ### Install the package
