@@ -94,8 +94,11 @@ class PPO(nn.Module):
         valid_mask = ~mask_right_shift(done_mask)
 
         for i in trange(cfg.K_epoch, desc="ppo", leave=False):
+            pi = self.pi(s)
+            pi_a = pi.gather(-1,a)
+            values = self.v(s)
+            
             with torch.no_grad():
-                values = self.v(s)
                 values_prime = self.v(s_prime)
 
                 td_target = r.unsqueeze(-1) + cfg.gamma * values_prime * ~done_mask
@@ -111,21 +114,23 @@ class PPO(nn.Module):
                     self.log("pre-norm advantages", advantages)
                     advantages = normalize_advantage(advantages, valid_mask)
 
-            pi = self.pi(s)
-            pi_a = pi.gather(-1,a)
-            ratio = torch.exp(torch.log(pi_a  + 1e-10) - torch.log(prob_a + 1e-10))  # a/b == exp(log(a)-log(b))
+            log_prob_old = torch.log(prob_a + 1e-10)
+            log_prob = torch.log(pi_a + 1e-10)
+
+            ratio = torch.exp(log_prob - log_prob_old)
+            approx_kl = (pi_a * (log_prob - log_prob_old)).sum(-1).masked_select(valid_mask.squeeze(-1)).mean()
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-cfg.eps_clip, 1+cfg.eps_clip) * advantages
 
             policy_loss = -torch.min(surr1, surr2).masked_select(valid_mask).mean()
                         
-            value_loss = F.smooth_l1_loss(self.v(s), td_target, reduction='none').masked_select(valid_mask).mean()
+            value_loss = F.smooth_l1_loss(values, td_target, reduction='none').masked_select(valid_mask).mean()
 
             entropy = Categorical(probs=pi).entropy()
             entropy_loss = -entropy.mean()
 
-            loss = policy_loss + cfg.value_loss_coef * value_loss + cfg.entropy_coef * entropy_loss
+            loss = policy_loss + cfg.value_loss_coef * value_loss + cfg.entropy_coef * entropy_loss + cfg.kl_coef * approx_kl
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -144,6 +149,7 @@ class PPO(nn.Module):
             self.log("valid mask sum", valid_mask.sum())
             self.log("entropy", entropy)
             self.log("entropy_loss", entropy_loss)
+            self.log("approx_kl", approx_kl)
     
     def log(self, name, value):
         if self.wandb_run:

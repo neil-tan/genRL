@@ -19,7 +19,7 @@ def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
-                    project_name="genRL_cartpole_ppo_tune_gpu",
+                    project_name="genRL_cartpole_ppo_tune_kl",
                     run_name="cartpole",
                     wandb_video_steps=2000,
                     ppo=PPOConfig(n_epi=1000),

@@ -8,6 +8,7 @@ class PPOConfig:
     gamma: float = 0.996
     lmbda: float = 0.99
     entropy_coef: float = 0.003
+    kl_coef: float = 0.01
     value_loss_coef: float = 1
     normalize_advantage: bool = True
     max_grad_norm: float = 0.15
