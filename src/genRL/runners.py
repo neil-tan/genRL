@@ -5,7 +5,7 @@ import gymnasium as gym
 import torch
 import torch.nn.functional as F
 from torch.distributions import Categorical
-from genRL.rl.ppo import PPO, SimpleMLP, PPOConfig
+from genRL.configs import PPOConfig, GRPOConfig
 import genesis as gs
 import sys
 import numpy as np
@@ -13,6 +13,8 @@ import wandb
 from tqdm import trange
 import optuna
 from dataclasses import replace, asdict
+from genRL.rl.agents import ppo_agent, grpo_agent
+from typing import Union
 
 np.random.seed(PPOConfig.random_seed)
 torch.manual_seed(PPOConfig.random_seed)
@@ -38,20 +40,46 @@ def config_ppo_search_space(trial, config:PPOConfig):
 
     return config
 
-
-def training_loop(env, config, run=None, epi_callback=None, compile=False):
-    device = env.unwrapped.device
+def config_grpo_search_space(trial, config:GRPOConfig):
+    search_space = {
+        "learning_rate": trial.suggest_loguniform("learning_rate", 1e-5, 5e-2),
+        "K_epoch": trial.suggest_int("K_epoch", 3, 16),
+        "weight_decay": trial.suggest_loguniform("weight_decay", 1e-6, 1e-4),
+        "entropy_coef": trial.suggest_loguniform("entropy_coef", 1e-4, 1e-2),
+        "kl_coef": trial.suggest_loguniform("kl_coef", 1e-3, 1e-2),
+        "max_grad_norm": trial.suggest_uniform("max_grad_norm", 0.1, 0.5),
+        "eps_clip": trial.suggest_uniform("eps_clip", 0.05, 0.2),
+        "num_envs": trial.suggest_categorical("num_envs", [8, 32, 64]),
+        "reward_scale": trial.suggest_loguniform("reward_scale", 0.001, 0.1),
+    }
     
-    pi = SimpleMLP(softmax_output=True, input_dim=4, hidden_dim=256, output_dim=2)
-    v = SimpleMLP(softmax_output=False, input_dim=4, hidden_dim=256, output_dim=1)
+    config = replace(config, **search_space)
+
+    return config
+
+def config_search_space(trial, config:Union[PPOConfig, GRPOConfig]):
+    """
+    Returns the config based on the algo type.
+    """
+    if isinstance(config, PPOConfig):
+        return config_ppo_search_space(trial, config)
+    elif isinstance(config, GRPOConfig):
+        return config_grpo_search_space(trial, config)
+    else:
+        raise ValueError(f"Unexpected algo type: {config}")
+
+def training_loop(env, agent, config, run=None, epi_callback=None, compile=False):
+    device = env.unwrapped.device
+    model = agent.to(device)
 
     if run is not None:
-        wandb.watch([pi, v], log="all")
+        wandb.watch([model,], log="all")
     else:
         wandb.init(project="cartpole_ppo", config=config)
         run = wandb.run
+    
+    model.set_run(run) # for logging
 
-    model = PPO(pi=pi, v=v, wandb_run=run, config=config).to(device)
     if compile:
         model.compile()
     
@@ -95,15 +123,16 @@ def training_loop(env, config, run=None, epi_callback=None, compile=False):
         
     return interval_mean_score
 
+
 def objective(trial,
               run_name,
               session_config,
               ):
 
-    ppo_config = config_ppo_search_space(trial, config=session_config.ppo)
+    config = config_search_space(trial, config=session_config.algo)
     
     if session_config.fast_dev_run:
-        ppo_config = replace(ppo_config, n_epi=8, T_horizon=200, wandb_video_steps=20, num_envs=2)
+        config = replace(config, n_epi=8, T_horizon=200, wandb_video_steps=20, num_envs=2)
 
     def epi_callback(n_epi, average_score):
         trial.report(average_score, n_epi)
@@ -116,7 +145,7 @@ def objective(trial,
     run = wandb.init(
                     project=session_config.project_name,
                     name=run_name,
-                    config=asdict(ppo_config),
+                    config=asdict(config),
                     reinit=True,
                     # mode="disabled", # dev dry-run
                 )
@@ -125,19 +154,32 @@ def objective(trial,
                    render_mode="human" if sys.platform == "darwin" else "ansi",
                    max_force=1000,
                    targetVelocity=10,
-                   num_envs=ppo_config.num_envs,
+                   num_envs=config.num_envs,
                    return_tensor=True,
-                   wandb_video_steps=ppo_config.wandb_video_steps,
+                   wandb_video_steps=config.wandb_video_steps,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=ppo_config.random_seed,
+                   seed=config.random_seed,
                    )
     
     env.reset()
     
-    result = training_loop(env, ppo_config, run, epi_callback, compile=True)
+    agent = get_agent(config)
+
+    result = training_loop(env, agent, config, run, epi_callback, compile=True)
 
     env.render()
     env.close()
     
     return result
+
+def get_agent(config: Union[PPOConfig, GRPOConfig]) -> Union[ppo_agent, grpo_agent]:
+    """
+    Returns the agent based on the config type.
+    """
+    if isinstance(config, PPOConfig):
+        return ppo_agent(config)
+    elif isinstance(config, GRPOConfig):
+        return grpo_agent(config)
+    else:
+        raise ValueError(f"Unexpected algo type: {config}")

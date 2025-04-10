@@ -7,28 +7,7 @@ from torch.distributions import Categorical
 from genRL.utils import normalize_advantage, mask_right_shift, masked_std, masked_mean
 from tqdm import trange
 from genRL.configs import GRPOConfig
-import wandb
 
-class SimpleMLP(nn.Module):
-    def __init__(self,
-                 input_dim,
-                 output_dim,
-                 softmax_output,
-                 hidden_dim=128,
-                 activation=F.relu,
-                 ):
-        super(SimpleMLP, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-        self.activation = activation
-        self.softmax_output = softmax_output
-        
-    def forward(self, x):
-        x = self.activation(self.fc1(x))
-        x = self.fc2(x)
-        if self.softmax_output:
-            return F.softmax(x, dim=-1)
-        return x
 
 class GRPO(nn.Module):
     def __init__(self,
@@ -43,8 +22,7 @@ class GRPO(nn.Module):
         self.pi = pi
         self.optimizer = optim.Adam(pi.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
         
-        if wandb_run:
-            self.wandb_run = wandb_run
+        self.wandb_run = wandb_run if wandb_run else None
     
     @torch.no_grad()
     def put_data(self, transition):
@@ -103,6 +81,9 @@ class GRPO(nn.Module):
             advantages = reward - reward_mean
             advantages = advantages / (reward_std + 1e-8)
             advantages = advantages.masked_fill(~valid_mask, 0.0)
+            
+            self.log("reward_mean", reward_mean)
+            self.log("reward_std", reward_std)
 
         for i in trange(cfg.K_epoch, desc="ppo", leave=False):
             pi = self.pi(s)
@@ -138,6 +119,12 @@ class GRPO(nn.Module):
             self.log("entropy", entropy)
             self.log("entropy_loss", entropy_loss)
             self.log("approx_kl", approx_kl)
+
     def log(self, name, value):
         if self.wandb_run:
             self.wandb_run.log({name: value})
+
+    def set_run(self, run):
+        if self.wandb_run is not None and self.wandb_run != run:
+            raise ValueError("WandB run already set")
+        self.wandb_run = run

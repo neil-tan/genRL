@@ -3,7 +3,7 @@ import gymnasium as gym
 import numpy as np
 import wandb
 import optuna
-from genRL.tasks.cartpole import objective
+from genRL.runners import objective
 from functools import partial
 from genRL.utils import wandb_load_study, wandb_save_study
 import tyro
@@ -12,17 +12,17 @@ import OpenGL
 
 '''
 run with:
-python examples/tune_ppo.py --project_name genRL_cartpole_tune --ppo.n_epi 250 --tune.n_trials 100
+python examples/tune.py --project_name genRL_cartpole_tune_grpo --tune.n-trials 100 algo:grpo-config --algo.n_epi 180
 '''
 
 def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
-                    project_name="genRL_cartpole_ppo_tune_kl",
+                    project_name="genRL_cartpole_tune_test",
                     run_name="cartpole",
                     wandb_video_steps=2000,
-                    ppo=PPOConfig(n_epi=1000),
+                    algo=PPOConfig(n_epi=1000),
                     tune=OptunaConfig(prune_patience=5, n_trials=100),
                 ),
                 description="Minimal RL PPO Cartpole Hyperparameter tuning example",

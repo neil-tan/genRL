@@ -9,7 +9,7 @@ import genesis as gs
 import sys
 import numpy as np
 import wandb
-from genRL.tasks.cartpole import training_loop
+from genRL.runners import training_loop, ppo_agent
 from genesis.utils.misc import get_platform
 import tyro
 from genRL.configs import SessionConfig
@@ -21,11 +21,11 @@ def main():
                     project_name="genRL_cartpole_ppo",
                     run_name="cartpole",
                     wandb_video_steps=2000,
-                    ppo=PPOConfig(num_envs=8, n_epi=180),
+                    algo=PPOConfig(num_envs=8, n_epi=180),
                 ),
                 description="Minimal RL PPO Cartpole example",
             )
-    config = args.ppo
+    config = args.algo
 
     wandb.login()
     run = wandb.init(
@@ -51,10 +51,13 @@ def main():
     
     env.reset()
     
+
+    agent = ppo_agent(config)
+
     if get_platform() == "macOS" and sys.gettrace() is None:
-        gs.tools.run_in_another_thread(fn=training_loop, args=(env, config, run))
+        gs.tools.run_in_another_thread(fn=training_loop, args=(env, agent, config, run))
     else:
-        training_loop(env, config, run)
+        training_loop(env, agent, config, run)
 
     env.render()
     env.close()

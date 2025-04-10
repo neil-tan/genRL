@@ -4,30 +4,41 @@ from genRL.utils import is_cuda_available
 import gymnasium as gym
 import torch
 import torch.nn.functional as F
-from genRL.configs import GRPOConfig
+from genRL.configs import get_agent
 import genesis as gs
 import sys
 import numpy as np
 import wandb
 from genRL.runners import training_loop
-from genRL.runners import grpo_agent
+from genRL.rl.agents import ppo_agent, grpo_agent
 from genesis.utils.misc import get_platform
 import tyro
 from genRL.configs import SessionConfig
+import dataclasses
+
+# python trian.py algo:grpo-config --algo.n_epi 55
 
 def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
-                    project_name="genRL_cartpole_grpo",
+                    project_name="genRL_cartpole_ppo",
                     run_name="cartpole",
                     wandb_video_steps=2000,
-                    algo=GRPOConfig(num_envs=32, n_epi=180),
+                    # algo=PPOConfig(num_envs=8, n_epi=180),
                 ),
-                description="Minimal RL GRPO Cartpole example",
+                description="Minimal RL PPO Cartpole example",
+                config=(tyro.conf.ConsolidateSubcommandArgs,),
             )
-    config = args.algo
 
+
+    # for key, value in dataclasses.asdict(args).items():
+    #     print(f"{key}: {value}")
+    
+    config = args.algo
+    
+    agent = get_agent(config)
+    
     wandb.login()
     run = wandb.init(
                     project=args.project_name,
@@ -35,7 +46,7 @@ def main():
                     config=config,
                     # mode="disabled", # dev dry-run
                 )
-
+    
     env = gym.make("GenCartPole-v0",
     # env = gym.make("GenCartPole-v0-dummy-ones",
     # env = gym.make("GenCartPole-dummy_inverse_trig-v0",
@@ -51,9 +62,7 @@ def main():
                    )
     
     env.reset()
-    
-    agent = grpo_agent(config)
-    
+
     if get_platform() == "macOS" and sys.gettrace() is None:
         gs.tools.run_in_another_thread(fn=training_loop, args=(env, agent, config, run))
     else:
@@ -61,6 +70,8 @@ def main():
 
     env.render()
     env.close()
+    
 
 if __name__ == '__main__':
     main()
+
