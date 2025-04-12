@@ -181,10 +181,10 @@ class GenCartPoleEnv(gym.Env):
         return self.observation(), self._get_info()
     
     def _start_recording(self):
-        assert self.wandb_video_steps > 0
-
         if self.wandb_video_steps is None:
             return
+        
+        assert self.wandb_video_steps > 0
 
         try:
             wandb_step = wandb.run.step
