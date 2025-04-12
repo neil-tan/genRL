@@ -55,7 +55,7 @@ pip install -e .
 ### Run Example
 A simple Cartpole PPO example:
 ```bash
-python examples/minimalRL_cartpole_ppo.py
+python examples/train.py algo:ppo-config --algo.n_epi 185
 ```
 
 Hyperparameter sweeping example:
@@ -63,3 +63,7 @@ Hyperparameter sweeping example:
 python examples/tune_ppo.py
 ```
 [![bMW2o.png](https://s6.gifyu.com/images/bMW2o.png)](https://wandb.ai/neiltan/genRL_cartpole_tune?nw=nwuserneiltan)
+
+### Related Links
+- [minimal RL](https://github.com/seungeunrho/minimalRL)
+- [cleanRL](https://github.com/vwxyzjn/cleanrl)

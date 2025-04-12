@@ -17,9 +17,6 @@ from genRL.rl.agents import ppo_agent, grpo_agent
 from typing import Union
 from genRL.rl.buffers import SimpleBuffer
 
-np.random.seed(PPOConfig.random_seed)
-torch.manual_seed(PPOConfig.random_seed)
-
 def config_ppo_search_space(trial, config:PPOConfig):
     search_space = {
         "learning_rate": trial.suggest_loguniform("learning_rate", 1e-3, 1e-2),

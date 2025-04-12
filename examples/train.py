@@ -2,27 +2,24 @@ import genRL.gym_envs.genesis.cartpole
 import genRL.gym_envs.test_envs.cartpole_dummy
 from genRL.utils import is_cuda_available
 import gymnasium as gym
-import torch
 import torch.nn.functional as F
-from genRL.configs import get_agent
+from genRL.runners import get_agent
 import genesis as gs
 import sys
-import numpy as np
 import wandb
 from genRL.runners import training_loop
-from genRL.rl.agents import ppo_agent, grpo_agent
 from genesis.utils.misc import get_platform
 import tyro
 from genRL.configs import SessionConfig
-import dataclasses
 
-# python trian.py algo:grpo-config --algo.n_epi 55
+# python examples/train.py algo:grpo-config --algo.n_epi 65
+# python examples/train.py algo:ppo-config --algo.n_epi 185
 
 def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
-                    project_name="genRL_cartpole_ppo",
+                    project_name="genRL_cartpole",
                     run_name="cartpole",
                     wandb_video_steps=2000,
                     # algo=PPOConfig(num_envs=8, n_epi=180),
@@ -58,7 +55,7 @@ def main():
                    wandb_video_steps=config.wandb_video_steps,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=config.random_seed,
+                   seed=args.random_seed,
                    )
     
     env.reset()

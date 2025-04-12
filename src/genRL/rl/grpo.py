@@ -42,8 +42,8 @@ class GRPO(nn.Module):
             advantages = advantages / (reward_std + 1e-8)
             advantages = advantages.masked_fill(~valid_mask, 0.0)
             
-            self.log("reward_mean", reward_mean)
-            self.log("reward_std", reward_std)
+            self.log("grpo/reward_mean", reward_mean)
+            self.log("grpo/reward_std", reward_std)
 
         for i in trange(cfg.K_epoch, desc="ppo", leave=False):
             pi = self.pi(s)

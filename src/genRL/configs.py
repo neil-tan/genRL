@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Union
+import torch
+import numpy as np
 
 @dataclass
 class PPOConfig:
@@ -15,8 +17,7 @@ class PPOConfig:
     max_grad_norm: float = 0.15
     eps_clip: float = 0.05
     T_horizon: int = 1500
-    random_seed: int = 42
-    num_envs: int = 32
+    num_envs: int = 8
     reward_scale: float = 0.015
     n_epi: int = 1000
     wandb_video_steps: int = 2000
@@ -24,17 +25,16 @@ class PPOConfig:
 
 @dataclass
 class GRPOConfig:
-    K_epoch: int = 3
-    learning_rate: float = 0.005
-    weight_decay: float = 0.00001
-    entropy_coef: float = 0.003
-    kl_coef: float = 0.00001
-    max_grad_norm: float = 0.15
-    eps_clip: float = 0.05
+    K_epoch: int = 6
+    learning_rate: float =0.00125
+    weight_decay: float = 0.000001
+    entropy_coef: float = 0.00015
+    kl_coef: float = 0.005
+    max_grad_norm: float = 0.2
+    eps_clip: float = 0.2
     T_horizon: int = 1500
-    random_seed: int = 42
-    num_envs: int = 32
-    reward_scale: float = 0.015
+    num_envs: int = 64
+    reward_scale: float = 0.003
     n_epi: int = 1000
     wandb_video_steps: int = 2000
 
@@ -52,6 +52,11 @@ class SessionConfig:
     project_name: str
     run_name: str
     wandb_video_steps: int
+    random_seed: int = 42
     fast_dev_run: bool = False
     algo: PPOConfig | GRPOConfig = field(default_factory=PPOConfig)
     tune: OptunaConfig = field(default_factory=OptunaConfig)
+    
+    def __post_init__(self):
+        np.random.seed(self.random_seed)
+        torch.manual_seed(self.random_seed)
