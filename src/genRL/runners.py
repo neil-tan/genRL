@@ -15,6 +15,7 @@ import optuna
 from dataclasses import replace, asdict
 from genRL.rl.agents import ppo_agent, grpo_agent
 from typing import Union
+from genRL.rl.buffers import SimpleBuffer
 
 np.random.seed(PPOConfig.random_seed)
 torch.manual_seed(PPOConfig.random_seed)
@@ -71,6 +72,7 @@ def config_search_space(trial, config:Union[PPOConfig, GRPOConfig]):
 def training_loop(env, agent, config, run=None, epi_callback=None, compile=False):
     device = env.unwrapped.device
     model = agent.to(device)
+    buffer = SimpleBuffer(config.T_horizon)
 
     if run is not None:
         wandb.watch([model,], log="all")
@@ -100,7 +102,7 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
                 s_prime, r, done, truncated, info = env.step(a)
 
                 prob_a = torch.gather(prob, -1, a)
-                model.put_data((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
+                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
                 s = s_prime
 
                 score += r
@@ -110,7 +112,8 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
                     run.log({"t_end/T_horizon": t/config.T_horizon})
                     break
 
-        model.train_net()
+        model.train_net(buffer)
+        buffer.clear()
 
         if n_epi%report_interval==0 and n_epi!=0:
             interval_score = (score/report_interval)
