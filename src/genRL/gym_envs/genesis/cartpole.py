@@ -7,8 +7,8 @@ from gymnasium import spaces
 import torch
 import wandb
 import tempfile
-from genRL.utils import downsample_list_image_to_video_array, move_to_device
-# %%
+from genRL.utils import downsample_list_image_to_video_array, auto_pytorch_device
+
 class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
 
@@ -37,7 +37,7 @@ class GenCartPoleEnv(gym.Env):
         self.max_force = max_force
         self.step_scaler = step_scaler
         self.current_steps_count = 0
-        self.device = "cpu" if gs_backend == gs.cpu else "cuda"
+        self.device = auto_pytorch_device(gs_backend)
 
         self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool, device=self.device)
 

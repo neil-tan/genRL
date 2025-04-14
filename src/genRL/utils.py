@@ -9,6 +9,7 @@ import os
 import re
 import optuna
 import functools
+import genesis as gs
 
 def masked_mean(x, mask):
     return (x * mask).sum() / max(mask.sum(), 1)
@@ -124,10 +125,25 @@ def wandb_save_study(study, total_trials_completed, project_name, study_name):
         "total_trials_completed" : total_trials_completed,
     }
     save_tune_session(session_info, project_name, study_name)
+
+
+def auto_pytorch_device(gs_backend=None):
+    """
+    Automatically selects the device based on availability.
     
-def is_cuda_available():
-    import torch
-    return torch.cuda.is_available()
+    Returns:
+        str: 'cuda' if a GPU is available, otherwise 'cpu'
+    """
+    
+    if gs_backend == gs.cpu:
+        return 'cpu'
+    
+    if torch.cuda.is_available():
+        return 'cuda'
+    if torch.backends.mps.is_available():
+        return 'mps'
+    
+    assert gs_backend is not None, "No Specified device and no GPU available"
 
 def to_device(device):
     """
