@@ -34,7 +34,9 @@ def test_vec_env_step():
         obs, reward, done, _, info = env.step(batched_action)
         assert obs.shape[0] == 5
         assert reward.shape[0] == 5
+        assert reward.dim() == 1
         assert done.shape[0] == 5
+        assert done.dim() == 1
         # info not tested
 
     env.close()

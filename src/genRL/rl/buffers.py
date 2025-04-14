@@ -29,18 +29,18 @@ class SimpleBuffer:
             
         # s,a,r,s_prime,done_mask, prob_a
         
-        done_mask = torch.stack(done_lst).transpose(1,0)
+        done_mask = torch.stack(done_lst).transpose(1,0).unsqueeze(-1)
         
         s = torch.stack(s_lst).transpose(0,1)# * done_mask
         a = torch.stack(a_lst).transpose(0,1)# * done_mask
-        # r = torch.stack(r_lst).transpose(1,0) * rshift_mask.squeeze(-1)
+        # Stack rewards which are now [num_envs] shaped tensors
         r = torch.stack(r_lst).transpose(1,0)
         s_prime = torch.stack(s_prime_lst).transpose(0,1)# * done_mask
         prob_a = torch.stack(prob_a_lst).transpose(1,0)# * done_mask
         
         # reward is still defined at the first done timestep
         # but anything more than that is invalid
-        if torch.count_nonzero(r[:,1:].unsqueeze(-1).masked_select(done_mask[:,0:-1,:])) > 0:
+        if torch.count_nonzero(r[:,1:].masked_select(done_mask[:,0:-1].squeeze(-1))) > 0:
             print("\033[33mwarning: Detected rewards for invalid timesteps\033[0m")
 
         ret = (s, a, r, s_prime, done_mask, prob_a)

@@ -218,16 +218,21 @@ class GenCartPoleEnv(gym.Env):
         observation = self._get_observation_tuple()
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
 
-        # vectorized
-        reward = torch.zeros((self.num_envs, 1), device=self.done.device)
-        reward = torch.where(self.done, reward, torch.ones_like(reward))
-        reward = reward.squeeze(-1)
-        self.done = self._should_terminate(cart_position, pole_angle).unsqueeze(-1)
+        # vectorized - initialize reward with shape [num_envs] directly
+        reward = torch.zeros(self.num_envs, device=self.done.device)
+        reward = torch.where(self.done.squeeze(-1), reward, torch.ones_like(reward))
+        # No need to squeeze reward since it's already [num_envs]
+        
+        self.done = self._should_terminate(cart_position, pole_angle)
         
         if self.num_envs == 1 and not self.return_tensor:
             return self.observation(), reward[0].item(), self.done.item(), self.done.item(), self._get_info()
 
-        # observation, reward, done, truncated, info
+        # observation: shape depends on observation implementation
+        # reward: shape [num_envs]
+        # done: shape [num_envs, 1]
+        # truncated: scalar (always False in this case)
+        # info: empty dict
         return self.observation(), reward, self.done, False, self._get_info()
 
     # def getPoleHeight(self):

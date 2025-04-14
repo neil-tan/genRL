@@ -21,6 +21,7 @@ class PPOConfig:
     reward_scale: float = 0.015
     n_epi: int = 1000
     wandb_video_steps: int = 2000
+    report_interval: int = 10
 
 
 @dataclass
@@ -37,6 +38,7 @@ class GRPOConfig:
     reward_scale: float = 0.003
     n_epi: int = 1000
     wandb_video_steps: int = 2000
+    report_interval: int = 10
 
 @dataclass
 class OptunaConfig:

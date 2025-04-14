@@ -39,6 +39,7 @@ class PPO(nn.Module):
             with torch.no_grad():
                 values_prime = self.v(s_prime)
 
+                # r is [batch, timesteps]
                 td_target = r.unsqueeze(-1) + cfg.gamma * values_prime * ~done_mask
                 delta = td_target - values
             
