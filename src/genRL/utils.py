@@ -10,6 +10,14 @@ import re
 import optuna
 import functools
 
+# --- Debugging Utility ---
+_DEBUG_ENABLED = os.environ.get('GENRL_DEBUG', '0') == '1'
+
+def debug_print(*args, **kwargs):
+    """Prints messages only if the GENRL_DEBUG environment variable is set to '1'."""
+    if _DEBUG_ENABLED:
+        print("[DEBUG]", *args, **kwargs)
+
 def masked_mean(x, mask):
     return (x * mask).sum() / max(mask.sum(), 1)
 
