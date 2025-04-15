@@ -7,7 +7,7 @@ from gymnasium import spaces
 import torch
 import wandb
 import tempfile
-from genRL.utils import downsample_list_image_to_video_array, move_to_device
+from genRL.utils import downsample_list_image_to_video_array, move_to_device, debug_print
 # %%
 class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
@@ -169,13 +169,15 @@ class GenCartPoleEnv(gym.Env):
         # Print shapes and dtypes for debugging Genesis API usage
         jnt_names = ['slider_to_cart', 'cart_to_pole']
         dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-        print(f"[DEBUG] dofs_idx: {dofs_idx}, type: {type(dofs_idx)}")
+        # Use debug_print instead of print
+        debug_print(f"dofs_idx: {dofs_idx}, type: {type(dofs_idx)}")
         random_positions = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
         random_velocities = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
-        print(f"[DEBUG] random_positions shape: {random_positions.shape}, dtype: {random_positions.dtype}")
-        print(f"[DEBUG] random_velocities shape: {random_velocities.shape}, dtype: {random_velocities.dtype}")
-        print(f"[DEBUG] random_positions numpy shape: {random_positions.cpu().numpy().shape}, dtype: {random_positions.cpu().numpy().dtype}")
-        print(f"[DEBUG] random_velocities numpy shape: {random_velocities.cpu().numpy().shape}, dtype: {random_velocities.cpu().numpy().dtype}")
+        # Use debug_print instead of print
+        debug_print(f"random_positions shape: {random_positions.shape}, dtype: {random_positions.dtype}")
+        debug_print(f"random_velocities shape: {random_velocities.shape}, dtype: {random_velocities.dtype}")
+        debug_print(f"random_positions numpy shape: {random_positions.cpu().numpy().shape}, dtype: {random_positions.cpu().numpy().dtype}")
+        debug_print(f"random_velocities numpy shape: {random_velocities.cpu().numpy().shape}, dtype: {random_velocities.cpu().numpy().dtype}")
         
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)

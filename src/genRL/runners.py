@@ -93,13 +93,10 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
 
         with torch.no_grad():
             for t in trange(config.T_horizon, desc="env", leave=False):
-                prob = model.pi(s)
-                m = Categorical(prob)
-                a = m.sample().unsqueeze(-1)
+                a, log_prob_a = model.pi.sample_action(s)
                 s_prime, r, done, truncated, info = env.step(a)
 
-                prob_a = torch.gather(prob, -1, a)
-                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
+                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, log_prob_a.detach(), done))
                 s = s_prime
 
                 score += r
@@ -159,7 +156,7 @@ def objective(trial,
                    wandb_video_steps=config.wandb_video_steps,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=config.random_seed,
+                   seed=session_config.random_seed,
                    )
     
     env.reset()
