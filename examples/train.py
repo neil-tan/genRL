@@ -34,8 +34,6 @@ def main():
     
     config = args.algo
     
-    agent = get_agent(config)
-    
     wandb.login()
     run = wandb.init(
                     project=args.project_name,
@@ -58,6 +56,7 @@ def main():
                    seed=args.random_seed,
                    )
     
+    agent = get_agent(env, config)
     env.reset()
 
     if get_platform() == "macOS" and sys.gettrace() is None:

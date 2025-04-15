@@ -28,7 +28,7 @@ def run_training(config):
                    seed=42)
     
     # Get agent
-    agent = get_agent(config)
+    agent = get_agent(env, config) # Pass env here
     agent.set_run(wandb.run)  # Set wandb run for logging
     
     # Run training using training_loop
@@ -70,4 +70,4 @@ def test_training_reward_snapshot(snapshot, algo_config):
 
 # @pytest.mark.parametrize("algo_config,expected_min_reward", [...])
 # def test_training_reward_threshold(algo_config, expected_min_reward):
-#     ... 
+#     ...

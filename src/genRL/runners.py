@@ -164,7 +164,7 @@ def objective(trial,
     
     env.reset()
     
-    agent = get_agent(config)
+    agent = get_agent(env, config)
 
     result = training_loop(env, agent, config, run, epi_callback, compile=True)
 
@@ -173,13 +173,13 @@ def objective(trial,
     
     return result
 
-def get_agent(config: Union[PPOConfig, GRPOConfig]) -> Union[ppo_agent, grpo_agent]:
+def get_agent(env, config: Union[PPOConfig, GRPOConfig]) -> Union[ppo_agent, grpo_agent]:
     """
     Returns the agent based on the config type.
     """
     if isinstance(config, PPOConfig):
-        return ppo_agent(config)
+        return ppo_agent(env, config)
     elif isinstance(config, GRPOConfig):
-        return grpo_agent(config)
+        return grpo_agent(env, config)
     else:
         raise ValueError(f"Unexpected algo type: {config}")

@@ -52,7 +52,7 @@ def main():
     
     env.reset()
     
-    agent = grpo_agent(config)
+    agent = grpo_agent(env, config)
     
     if get_platform() == "macOS" and sys.gettrace() is None:
         gs.tools.run_in_another_thread(fn=training_loop, args=(env, agent, config, run))
