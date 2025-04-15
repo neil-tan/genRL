@@ -166,12 +166,16 @@ class GenCartPoleEnv(gym.Env):
 
         self.scene.reset(self._init_state)
         
+        # Print shapes and dtypes for debugging Genesis API usage
         jnt_names = ['slider_to_cart', 'cart_to_pole']
         dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-
-        # vectorized
+        print(f"[DEBUG] dofs_idx: {dofs_idx}, type: {type(dofs_idx)}")
         random_positions = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
         random_velocities = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
+        print(f"[DEBUG] random_positions shape: {random_positions.shape}, dtype: {random_positions.dtype}")
+        print(f"[DEBUG] random_velocities shape: {random_velocities.shape}, dtype: {random_velocities.dtype}")
+        print(f"[DEBUG] random_positions numpy shape: {random_positions.cpu().numpy().shape}, dtype: {random_positions.cpu().numpy().dtype}")
+        print(f"[DEBUG] random_velocities numpy shape: {random_velocities.cpu().numpy().shape}, dtype: {random_velocities.cpu().numpy().dtype}")
         
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)

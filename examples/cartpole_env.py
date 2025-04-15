@@ -48,3 +48,11 @@ while True:
     
 # %%
 print("finished")
+
+if __name__ == "__main__":
+    import gymnasium as gym
+    env = gym.make("GenCartPole-v0", render_mode=None, num_envs=1, return_tensor=True)
+    obs, info = env.reset()
+    print("Observation shape:", obs.shape)
+    print("Initial Info:", info)
+    env.close()
