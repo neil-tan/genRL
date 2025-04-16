@@ -34,7 +34,7 @@ def grpo_agent(env: gym.Env, config): # Add env argument
     else:
         raise NotImplementedError(f"Action space type {type(env.action_space)} not supported")
     
-    pi = SimpleDiscreteMLP(softmax_output=True, input_dim=input_dim, hidden_dim=256, output_dim=output_dim)
+    pi = SimpleDiscreteMLP(output_softmax=True, input_dim=input_dim, hidden_dim=256, output_dim=output_dim)
     model = GRPO(pi=pi, wandb_run=None, config=config)
     
     return model

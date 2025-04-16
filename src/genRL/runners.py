@@ -83,7 +83,7 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
         model.compile()
     
     score = torch.zeros(config.num_envs, device=device)
-    report_interval = min(20, config.n_epi-1)
+    report_interval = min(config.report_interval, config.n_epi-1)
     interval_mean_score = None
 
     epi_bar = trange(config.n_epi, desc="n_epi")
@@ -109,7 +109,7 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
         model.train_net(buffer)
         buffer.clear()
 
-        if (n_epi+1)%report_interval==0 and n_epi!=0:
+        if n_epi%report_interval==0:
             interval_score = (score/report_interval)
             interval_mean_score = (score/report_interval).mean()
             epi_bar.write(f"n_epi: {n_epi}, score: {interval_mean_score}")
