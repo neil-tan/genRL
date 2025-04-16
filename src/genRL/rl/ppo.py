@@ -32,9 +32,8 @@ class PPO(nn.Module):
         valid_mask = ~mask_right_shift(done_mask)
 
         for i in trange(cfg.K_epoch, desc="ppo", leave=False):
-            action_distribution = self.pi.get_distribution(s)
-            log_prob = action_distribution.log_prob(a.squeeze(-1)).unsqueeze(-1)
-            entropy = action_distribution.entropy()
+            # Sample current policy
+            _, log_prob, entropy = self.pi.sample_action(s, a, eval_entropy=True)
             values = self.v(s)
             
             with torch.no_grad():
@@ -64,7 +63,7 @@ class PPO(nn.Module):
 
             policy_loss = -torch.min(surr1, surr2).masked_select(valid_mask).mean()
             value_loss = F.smooth_l1_loss(values, td_target, reduction='none').masked_select(valid_mask).mean()
-            kl_loss = F.kl_div(log_prob, log_prob_a, log_target=True).masked_select(valid_mask.squeeze(-1)).mean()
+            kl_loss = F.kl_div(log_prob, log_prob_a, log_target=True, reduction="none").masked_select(valid_mask).mean()
 
             entropy_loss = -entropy.mean()
 

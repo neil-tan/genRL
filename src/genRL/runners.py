@@ -93,7 +93,7 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
 
         with torch.no_grad():
             for t in trange(config.T_horizon, desc="env", leave=False):
-                a, log_prob_a = model.pi.sample_action(s)
+                a, log_prob_a, _ = model.pi.sample_action(s)
                 s_prime, r, done, truncated, info = env.step(a)
 
                 buffer.add((s, a.detach(), r*config.reward_scale, s_prime, log_prob_a.detach(), done))
@@ -109,7 +109,7 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
         model.train_net(buffer)
         buffer.clear()
 
-        if n_epi%report_interval==0 and n_epi!=0:
+        if (n_epi+1)%report_interval==0 and n_epi!=0:
             interval_score = (score/report_interval)
             interval_mean_score = (score/report_interval).mean()
             epi_bar.write(f"n_epi: {n_epi}, score: {interval_mean_score}")

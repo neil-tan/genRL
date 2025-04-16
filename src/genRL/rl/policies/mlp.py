@@ -24,15 +24,18 @@ class SimpleDiscreteMLP(nn.Module):
             logits = F.softmax(logits, dim=-1)
         return logits
     
-    def get_distribution(self, x):
+    def action_distribution(self, x):
         logits = self.forward(x)
         return Categorical(logits=logits)
 
-    def sample_action(self, x):
-        distribution = self.get_distribution(x)
-        action = distribution.sample()
+    def sample_action(self, s, action=None, eval_entropy=False):
+        # assume action is [batch, timesteps, 1]
+        distribution = self.action_distribution(s)
+        action = distribution.sample() if action is None else action.squeeze(-1)
         log_prob = distribution.log_prob(action)
-        return action.unsqueeze(-1), log_prob.unsqueeze(-1)
+        entropy = distribution.entropy() if eval_entropy else None
+        
+        return action.unsqueeze(-1), log_prob.unsqueeze(-1), entropy
 
 class SimpleContinuousMLP(nn.Module):
     def __init__(self,
@@ -56,4 +59,13 @@ class SimpleContinuousMLP(nn.Module):
     def action_distribution(self, x):
         mean, std = self.forward(x)
         return torch.distributions.Normal(mean, std)
+    
+    def sample_action(self, s, action=None, eval_entropy=False):
+        # assume action is [batch, timesteps, action_dim]
+        distribution = self.action_distribution(s)
+        action = distribution.rsample() if action is None else action
+        log_prob = distribution.log_prob(action)
+        log_prob = log_prob.sum(-1, keepdim=True)
+        entropy = distribution.entropy() if eval_entropy else None
+        return action, log_prob, entropy
     
