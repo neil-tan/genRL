@@ -14,6 +14,7 @@ from genRL.configs import SessionConfig
 
 # python examples/train.py algo:grpo-config --algo.n_epi 65
 # python examples/train.py algo:ppo-config --algo.n_epi 185
+# python examples/train.py algo:ppo-config --algo.n_epi 185 --wandb disabled
 
 def main():
     args = tyro.cli(
@@ -39,6 +40,7 @@ def main():
                     project=args.project_name,
                     name=args.run_name,
                     config=config,
+                    mode=args.wandb,
                     # mode="disabled", # dev dry-run
                 )
     

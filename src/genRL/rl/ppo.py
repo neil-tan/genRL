@@ -87,7 +87,7 @@ class PPO(nn.Module):
             self.log("valid mask sum", valid_mask.sum())
             self.log("entropy", entropy)
             self.log("entropy_loss", entropy_loss)
-            self.log("approx_kl", kl_loss)
+            self.log("KL loss", kl_loss)
     
     def log(self, name, value):
         if self.wandb_run:

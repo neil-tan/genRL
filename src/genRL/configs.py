@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Union
 import torch
 import numpy as np
+from typing import Literal
 
 @dataclass
 class PPOConfig:
@@ -54,6 +55,7 @@ class SessionConfig:
     project_name: str
     run_name: str
     wandb_video_steps: int
+    wandb: Literal["online", "offline", "disabled"] = "online"
     random_seed: int = 42
     fast_dev_run: bool = False
     algo: PPOConfig | GRPOConfig = field(default_factory=PPOConfig)

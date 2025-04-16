@@ -45,7 +45,7 @@ class GenCartPoleEnv(gym.Env):
         self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
                                             np.array([4.8000002e+00, np.inf, 4.1887903e-01, np.inf]), (4,), np.float32)
         
-        self.action_space = spaces.Discrete(1)
+        self.action_space = spaces.Discrete(2)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
