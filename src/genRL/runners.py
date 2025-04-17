@@ -67,7 +67,8 @@ def config_search_space(trial, config:Union[PPOConfig, GRPOConfig]):
         raise ValueError(f"Unexpected algo type: {config}")
 
 def training_loop(env, agent, config, run=None, epi_callback=None, compile=False):
-    device = env.unwrapped.device
+    # Determine device based on availability, similar to train.py setup
+    device = "cuda" if is_cuda_available() else "cpu"
     model = agent.to(device)
     buffer = SimpleBuffer(config.T_horizon)
 
@@ -93,20 +94,26 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
 
         with torch.no_grad():
             for t in trange(config.T_horizon, desc="env", leave=False):
-                prob = model.pi(s)
+                # Convert state s (numpy array) to tensor before passing to model
+                s_tensor = torch.from_numpy(s).float().to(device)
+                prob = model.pi(s_tensor)
                 m = Categorical(prob)
                 a = m.sample().unsqueeze(-1)
-                s_prime, r, done, truncated, info = env.step(a)
+                # Convert action tensor back to numpy for env.step
+                a_np = a.cpu().numpy()
+                s_prime, r, done, truncated, info = env.step(a_np)
 
                 prob_a = torch.gather(prob, -1, a)
-                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
-                s = s_prime
+                # Convert numpy r, s_prime, done to tensors for buffer
+                buffer.add((s_tensor, a.detach(), torch.from_numpy(r).float().to(device)*config.reward_scale, torch.from_numpy(s_prime).float().to(device), prob_a.detach(), torch.from_numpy(done).bool().to(device)))
+                s = s_prime # Keep s as numpy array for the start of the next loop
 
-                score += r
+                # Convert numpy reward r to tensor for score calculation
+                score += torch.from_numpy(r).float().to(device)
                 
-                done = done.all() if isinstance(done, torch.Tensor) else done
-                if done:
-                    run.log({"t_end/T_horizon": t/config.T_horizon})
+                # done is numpy array, check if all are done
+                if done.all(): # Use .all() to check if all envs terminated
+                    # run.log({"t_end/T_horizon": t/config.T_horizon}) # wandb disabled for now
                     break
 
         model.train_net(buffer)
