@@ -7,8 +7,8 @@ from gymnasium import spaces
 import torch
 import wandb
 import tempfile
-from genRL.utils import downsample_list_image_to_video_array, auto_pytorch_device
-
+from genRL.utils import downsample_list_image_to_video_array, auto_pytorch_device, debug_print
+# %%
 class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
 
@@ -45,7 +45,7 @@ class GenCartPoleEnv(gym.Env):
         self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
                                             np.array([4.8000002e+00, np.inf, 4.1887903e-01, np.inf]), (4,), np.float32)
         
-        self.action_space = spaces.Discrete(1)
+        self.action_space = spaces.Discrete(2)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -166,12 +166,18 @@ class GenCartPoleEnv(gym.Env):
 
         self.scene.reset(self._init_state)
         
+        # Print shapes and dtypes for debugging Genesis API usage
         jnt_names = ['slider_to_cart', 'cart_to_pole']
         dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-
-        # vectorized
+        # Use debug_print instead of print
+        debug_print(f"dofs_idx: {dofs_idx}, type: {type(dofs_idx)}")
         random_positions = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
         random_velocities = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
+        # Use debug_print instead of print
+        debug_print(f"random_positions shape: {random_positions.shape}, dtype: {random_positions.dtype}")
+        debug_print(f"random_velocities shape: {random_velocities.shape}, dtype: {random_velocities.dtype}")
+        debug_print(f"random_positions numpy shape: {random_positions.cpu().numpy().shape}, dtype: {random_positions.cpu().numpy().dtype}")
+        debug_print(f"random_velocities numpy shape: {random_velocities.cpu().numpy().shape}, dtype: {random_velocities.cpu().numpy().dtype}")
         
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)
@@ -218,16 +224,21 @@ class GenCartPoleEnv(gym.Env):
         observation = self._get_observation_tuple()
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
 
-        # vectorized
-        reward = torch.zeros((self.num_envs, 1), device=self.done.device)
-        reward = torch.where(self.done, reward, torch.ones_like(reward))
-        reward = reward.squeeze(-1)
-        self.done = self._should_terminate(cart_position, pole_angle).unsqueeze(-1)
+        # vectorized - initialize reward with shape [num_envs] directly
+        reward = torch.zeros(self.num_envs, device=self.done.device)
+        reward = torch.where(self.done.squeeze(-1), reward, torch.ones_like(reward))
+        # No need to squeeze reward since it's already [num_envs]
+        
+        self.done = self._should_terminate(cart_position, pole_angle)
         
         if self.num_envs == 1 and not self.return_tensor:
             return self.observation(), reward[0].item(), self.done.item(), self.done.item(), self._get_info()
 
-        # observation, reward, done, truncated, info
+        # observation: shape depends on observation implementation
+        # reward: shape [num_envs]
+        # done: shape [num_envs, 1]
+        # truncated: scalar (always False in this case)
+        # info: empty dict
         return self.observation(), reward, self.done, False, self._get_info()
 
     # def getPoleHeight(self):

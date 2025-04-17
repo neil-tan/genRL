@@ -26,12 +26,12 @@ class GRPO(nn.Module):
 
     def train_net(self, buffer):
         cfg = self.config
-        s, a, r, s_prime, done_mask, prob_a = buffer.make_batch()
+        s, a, r, s_prime, done_mask, log_prob_a = buffer.make_batch()
         
         valid_mask = ~mask_right_shift(done_mask)
         
         with torch.no_grad():
-            # unlike PPO, which considers step-wise rewards
+            # unlike PPO, which agnostic to sparse or dense rewards
             # here, we need to calculate the outcome supervision reward
             reward = torch.sum(r.unsqueeze(-1).masked_fill(~valid_mask, 0), dim=1, keepdim=True)
             reward_mean = torch.mean(reward)
@@ -46,24 +46,21 @@ class GRPO(nn.Module):
             self.log("grpo/reward_std", reward_std)
 
         for i in trange(cfg.K_epoch, desc="ppo", leave=False):
-            pi = self.pi(s)
-            pi_a = pi.gather(-1,a)
+            # Sample current policy
+            _, log_prob, entropy = self.pi.sample_action(s, a, eval_entropy=True)
 
-            log_prob_old = torch.log(prob_a + 1e-10)
-            log_prob = torch.log(pi_a + 1e-10)
-
-            ratio = torch.exp(log_prob - log_prob_old)
-            approx_kl = (pi_a * (log_prob - log_prob_old)).sum(-1).masked_select(valid_mask.squeeze(-1)).mean()
+            ratio = torch.exp(log_prob - log_prob_a)
 
             surr1 = ratio * advantages
             surr2 = torch.clamp(ratio, 1-cfg.eps_clip, 1+cfg.eps_clip) * advantages
 
             policy_loss = -torch.min(surr1, surr2).masked_select(valid_mask).mean()
 
-            entropy = Categorical(probs=pi).entropy()
+            kl_loss = F.kl_div(log_prob, log_prob_a, log_target=True, reduction="none").masked_select(valid_mask).mean()
+
             entropy_loss = -entropy.mean()
 
-            loss = policy_loss + cfg.entropy_coef * entropy_loss + cfg.kl_coef * approx_kl
+            loss = policy_loss + cfg.entropy_coef * entropy_loss + cfg.kl_coef * kl_loss
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -78,7 +75,7 @@ class GRPO(nn.Module):
             self.log("valid mask sum", valid_mask.sum())
             self.log("entropy", entropy)
             self.log("entropy_loss", entropy_loss)
-            self.log("approx_kl", approx_kl)
+            self.log("KL loss", kl_loss)
 
     def log(self, name, value):
         if self.wandb_run:

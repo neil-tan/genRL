@@ -103,7 +103,11 @@ pip install -e .
 ### Run Example
 A simple Cartpole PPO example:
 ```bash
-python examples/train.py algo:ppo-config --algo.n_epi 185
+python examples/train.py algo:ppo-config --algo.n_epi 185 --wandb disabled
+```
+Running GRPO with Wandb logging:
+```bash
+python examples/train.py algo:grpo-config --algo.n_epi 60
 ```
 
 Hyperparameter sweeping example:
@@ -111,6 +115,43 @@ Hyperparameter sweeping example:
 python examples/tune_ppo.py
 ```
 [![bMW2o.png](https://s6.gifyu.com/images/bMW2o.png)](https://wandb.ai/neiltan/genRL_cartpole_tune?nw=nwuserneiltan)
+
+### Testing
+The project uses pytest for testing, including snapshot testing for regression testing of training behavior.
+
+#### Running Tests
+```bash
+# Run all tests
+pytest
+
+# Run specific test file
+pytest tests/gym_envs/genesis/test_cartpole_training.py -s
+```
+
+<details>
+  <summary>Snapshot Testing</summary>
+Snapshot tests verify that training behavior remains consistent by comparing current outputs with previously saved snapshots.
+
+- **Creating/Updating Snapshots**:
+  ```bash
+  pytest tests/gym_envs/genesis/test_cartpole_training.py -s --snapshot-update
+  ```
+  Use this when:
+  - Setting up tests for the first time
+  - Making intentional changes to training behavior
+  - Modifying test parameters
+
+- **Snapshot Files**:
+  - Located in the `tests/snapshots` directory
+  - Should be committed to the repository
+  - Serve as the "ground truth" for regression testing
+
+- **Workflow**:
+  1. For normal development: Run tests without `--snapshot-update`
+  2. For intentional behavior changes: Update snapshots and commit both code and snapshot changes
+  3. For CI/CD: Always run without `--snapshot-update`
+
+</details>
 
 ### Related Links
 - [minimal RL](https://github.com/seungeunrho/minimalRL)

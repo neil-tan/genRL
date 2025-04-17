@@ -11,6 +11,14 @@ import optuna
 import functools
 import genesis as gs
 
+# --- Debugging Utility ---
+_DEBUG_ENABLED = os.environ.get('GENRL_DEBUG', '0') == '1'
+
+def debug_print(*args, **kwargs):
+    """Prints messages only if the GENRL_DEBUG environment variable is set to '1'."""
+    if _DEBUG_ENABLED:
+        print("[DEBUG]", *args, **kwargs)
+
 def masked_mean(x, mask):
     return (x * mask).sum() / max(mask.sum(), 1)
 
@@ -126,6 +134,11 @@ def wandb_save_study(study, total_trials_completed, project_name, study_name):
     }
     save_tune_session(session_info, project_name, study_name)
 
+def is_cuda_available():
+    if torch.cuda.is_available():
+        return True
+    else:
+        return False
 
 def auto_pytorch_device(gs_backend=None):
     """
