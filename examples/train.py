@@ -1,99 +1,116 @@
-import genRL.gym_envs.genesis.cartpole
-import genRL.gym_envs.test_envs.cartpole_dummy
-import genRL.gym_envs.mujoco.cartpole
-from genRL.utils import is_cuda_available
-import gymnasium as gym
-import torch.nn.functional as F
-from genRL.runners import get_agent
-import genesis as gs
 import sys
+
+# Import known environments to register them globally
+import genRL.gym_envs.genesis.cartpole
+import genRL.gym_envs.mujoco.cartpole 
+# import genRL.gym_envs.test_envs.cartpole_dummy # If needed
+from genRL.gym_envs.base import wrap_env_for_training # Import the new wrapper function
+
 import wandb
-from genRL.runners import training_loop
+from genRL.runners import training_loop, get_agent
 from genesis.utils.misc import get_platform
 import tyro
 from genRL.configs import SessionConfig
-from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
-from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch
+import gymnasium as gym
+import genesis as gs
+from genRL.utils import is_cuda_available
 
-# python examples/train.py algo:grpo-config --algo.n_epi 65
-# python examples/train.py algo:ppo-config --algo.n_epi 185
+# python examples/train.py --env-id MujocoCartPole-v0 algo:ppo-config --algo.n-epi 100
+# python examples/train.py --env-id GenCartPole-v0 algo:ppo-config --algo.n-epi 100
 
 def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
                     project_name="genRL_cartpole",
-                    run_name="cartpole_mujoco_ppo_test",
+                    run_name="cartpole_auto_vec", # Generic name
+                    env_id="GenCartPole-v0", # Default env
                     wandb_video_steps=2000,
-                    # algo=PPOConfig(num_envs=8, n_epi=180),
+                    # Ensure algo default is handled correctly if not provided via cmd line
                 ),
-                description="Minimal RL PPO Mujoco Cartpole example",
-                config=(tyro.conf.ConsolidateSubcommandArgs,),
+                description="Minimal RL example with auto-vectorization",
             )
 
-
-    # for key, value in dataclasses.asdict(args).items():
-    #     print(f"{key}: {value}")
-    
+    # If algo is specified via subcommand (e.g., algo:ppo-config), tyro handles it.
+    # If not, it uses the default_factory in SessionConfig.
     config = args.algo
     
     agent = get_agent(config)
     
-    # wandb.login()
-    # run = wandb.init(
-    #                 project=args.project_name,
-    #                 name=args.run_name,
-    #                 config=config,
-    #                 mode="disabled", # dev dry-run
-    #             )
-    run = None # Disable wandb run object
+    # Restore wandb init - use WANDB_MODE=disabled env var to disable
+    wandb.login()
+    run = wandb.init(
+                    project=args.project_name,
+                    name=f"{args.env_id}-{args.run_name}", # Include env_id in run name
+                    config=config,
+                    # mode="disabled", # Add this via command line or env var if needed
+                )
     
-    # Create vectorized environment
-    # Determine device for the agent/buffer
+    # --- Environment Creation Logic ---
+    # Get environment specification using gym.spec()
+    print(f"Getting spec for environment ID: {args.env_id}")
+    try:
+        env_spec = gym.spec(args.env_id)
+    except Exception as e:
+        print(f"Error getting spec for environment {args.env_id}: {e}")
+        raise e
+
+    # Check the entry point module path from the spec
+    if callable(env_spec.entry_point):
+        # If entry_point is a class or function, check its module
+        entry_point_module = env_spec.entry_point.__module__
+    else:
+        # If entry_point is a string like "module:callable", extract module part
+        entry_point_module = str(env_spec.entry_point).split(":")[0]
+        
+    is_genesis_env = entry_point_module.startswith("genRL.gym_envs.genesis")
+    print(f"Detected entry point module: {entry_point_module}")
+    print(f"Is Genesis environment? {is_genesis_env}")
+
+    # Prepare base keyword arguments, removing args handled by wrappers/vectorization
+    base_env_kwargs = {
+        "seed": args.random_seed,
+        "render_mode": "human" if sys.platform == "darwin" else "ansi", # Base render mode
+        # Add other args specific to the base envs if needed, filtering out others
+        # Example: Pass wandb steps only to Genesis? Might need finer control or envs ignore unknown args
+        # "wandb_video_steps": args.wandb_video_steps if args.env_id.startswith("Gen") else None,
+    }
+    # Add genesis specific args only if it's a genesis env
+    if is_genesis_env:
+        base_env_kwargs["num_envs"] = config.num_envs
+        base_env_kwargs["return_tensor"] = True
+        base_env_kwargs["wandb_video_steps"] = args.wandb_video_steps
+        base_env_kwargs["logging_level"] = "warning"
+        base_env_kwargs["gs_backend"] = gs.gpu if is_cuda_available() else gs.cpu
+        
+    # Create the (potentially internally vectorized) base environment
+    try:
+        envs = gym.make(args.env_id, **base_env_kwargs)
+        print(f"Base environment {args.env_id} created successfully.")
+    except Exception as e:
+        print(f"Error creating base environment {args.env_id}: {e}")
+        raise e
+
+    # --- Vectorization and Tensor Wrapping Logic ---
+    # Determine device based on availability
     device = "cuda" if is_cuda_available() else "cpu"
     
-    def make_env(seed, render_mode):
-        def _init():
-            # Pass render_mode for potential video recording, seed for reproducibility
-            env = gym.make("MujocoCartPole-v0", seed=seed, render_mode=render_mode)
-            # Don't wrap with NumpyToTorch here
-            # env = NumpyToTorch(env, device=device)
-            return env
-        return _init
+    # envs.reset() # Reset is typically handled within the training loop
 
-    # Determine render mode for worker envs (rgb_array needed for recording)
-    # For human rendering, typically only one env can render
-    worker_render_mode = "rgb_array" # if args.wandb_video_steps else None # Keep rgb_array for now
+    if not is_genesis_env:
+        # For non-Genesis environments, apply necessary wrapping
+        envs = wrap_env_for_training(args.env_id, envs, config.num_envs, device)
+    # Genesis environments handle their own wrapping/tensor returns internally
+    # No wrapping needed here for them.
     
-    # Use SyncVectorEnv for simplicity, AsyncVectorEnv for potential speedup
-    envs = SyncVectorEnv([
-        make_env(args.random_seed + i, worker_render_mode) # Don't pass device
-        for i in range(config.num_envs)
-    ])
-    
-    # Wrap the vectorized environment to convert outputs to tensors
-    envs = VectorNumpyToTorch(envs, device=device)
-    
-    # env = gym.make("GenCartPole-v0",
-    # # env = gym.make("GenCartPole-v0-dummy-ones",
-    # # env = gym.make("GenCartPole-dummy_inverse_trig-v0",
-    #                render_mode="human" if sys.platform == "darwin" else "ansi",
-    #                max_force=1000,
-    #                targetVelocity=10,
-    #                num_envs=config.num_envs,
-    #                return_tensor=True,
-    #                wandb_video_steps=config.wandb_video_steps,
-    #                logging_level="warning", # "info", "warning", "error", "debug"
-    #                gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-    #                seed=args.random_seed,
-    #                )
+    # --- End Environment Creation Logic ---
     
     # envs.reset() # Reset is typically handled within the training loop
 
     if get_platform() == "macOS" and sys.gettrace() is None:
         gs.tools.run_in_another_thread(fn=training_loop, args=(envs, agent, config, run))
     else:
-        training_loop(envs, agent, config, run) # Pass vectorized envs
+        training_loop(envs, agent, config, run) # Pass potentially wrapped envs
 
     # envs.render() # Vector env rendering is handled differently or via wrappers
     envs.close()

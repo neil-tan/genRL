@@ -56,6 +56,7 @@ class SessionConfig:
     wandb_video_steps: int
     random_seed: int = 42
     fast_dev_run: bool = False
+    env_id: str = "GenCartPole-v0"
     algo: PPOConfig | GRPOConfig = field(default_factory=PPOConfig)
     tune: OptunaConfig = field(default_factory=OptunaConfig)
     

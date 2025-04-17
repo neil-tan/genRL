@@ -8,8 +8,9 @@ import torch
 import wandb
 import tempfile
 from genRL.utils import downsample_list_image_to_video_array, move_to_device
+from genRL.gym_envs.base import GenesisEnvMixin
 # %%
-class GenCartPoleEnv(gym.Env):
+class GenCartPoleEnv(gym.Env, GenesisEnvMixin):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
 
     def __init__(self,

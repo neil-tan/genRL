@@ -5,6 +5,10 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 import mujoco
 import torch # For potential tensor return types
+from gymnasium.vector import SyncVectorEnv # Import for factory
+from gymnasium.wrappers import NumpyToTorch as GymNumpyToTorch # Import for factory
+from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch # Import for factory
+from genRL.gym_envs.base import MujocoEnvMixin
 
 DEFAULT_CAMERA_CONFIG = {
     "trackbodyid": 0,        # id of the body to track (-1 => world, 0 => cart)
@@ -14,9 +18,9 @@ DEFAULT_CAMERA_CONFIG = {
     "azimuth": 180.0,        # camera rotation around the z axis
 }
 
-class MujocoCartPoleEnv(gym.Env):
+class MujocoCartPoleEnv(gym.Env, MujocoEnvMixin):
     metadata = {
-        "render_modes": ["human", "rgb_array", "depth_array"],
+        "render_modes": ["human", "rgb_array", "depth_array", "ansi"],
         "render_fps": 100, # Corresponds to model timestep 0.01
     }
 
@@ -171,6 +175,11 @@ class MujocoCartPoleEnv(gym.Env):
         elif self.render_mode == "depth_array":
             self.renderer.update_scene(self.data, scene_option=mujoco.MjvOption().flags[mujoco.mjtVisFlag.mjVIS_Depth])
             return self.renderer.render()
+        elif self.render_mode == "ansi":
+            # Simple text rendering for ansi mode
+            obs = self._get_obs()
+            print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
+            return None # ANSI rendering usually doesn't return data
         # No rendering for ansi mode in MuJoCo
 
     def close(self):
@@ -179,10 +188,28 @@ class MujocoCartPoleEnv(gym.Env):
             self.renderer = None
         # No explicit close needed for model/data in mujoco-python > 3.0
 
-# Register the environment
+# Factory function to create a single base environment instance
+def create_mujoco_cartpole(**kwargs):
+    """Factory function to create a single MujocoCartPoleEnv instance.
+       Accepts kwargs passed from gym.make() and filters them.
+    """
+    print(f"[Factory] Creating single MujocoCartPole with kwargs: {kwargs}")
+    
+    # Filter kwargs to only pass known args to the base env
+    allowed_keys = ['seed', 'render_mode', 'xml_file', 'frame_skip', 'camera_config', 'max_force']
+    base_kwargs = {k: v for k, v in kwargs.items() if k in allowed_keys}
+    if 'render_mode' not in base_kwargs:
+         base_kwargs['render_mode'] = None
+         
+    # Create and return the single environment instance
+    env = MujocoCartPoleEnv(**base_kwargs)
+    print("[Factory] Single MujocoCartPoleEnv instance created.")
+    return env
+
+# Register the environment using the simplified factory function
 gym.register(
     id='MujocoCartPole-v0',
-    entry_point='genRL.gym_envs.mujoco.cartpole:MujocoCartPoleEnv',
-    max_episode_steps=1000, # Standard max steps for CartPole in Gym
-    reward_threshold=950.0, # Standard reward threshold
+    entry_point=create_mujoco_cartpole, # Use the factory function
+    max_episode_steps=1000, 
+    reward_threshold=950.0, 
 ) 
