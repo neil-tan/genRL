@@ -5,7 +5,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
 <robot name="physics">
   <link name="world"/>
   <link name="slideBar">
-    <visual>
+    <visual name="slideBar_visual">
       <geometry>
         <box size="30 0.05 0.05"/>
       </geometry>
@@ -21,7 +21,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
   </link>
 
   <link name="cart">
-    <visual>
+    <visual name="cart_visual">
       <geometry>
         <box size="0.5 0.5 0.2"/>
       </geometry>
@@ -30,7 +30,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
         <color rgba="0 0 .8 1"/>
       </material>
     </visual>
-    <collision>
+    <collision name="cart_collision">
       <geometry>
           <box size="0.5 0.5 0.2"/>
       </geometry>
@@ -51,7 +51,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
   </joint>
 
   <link name="pole">
-    <visual>
+    <visual name="pole_visual">
       <geometry>
         <box size="0.05 0.05 1.0"/>	
       </geometry>
@@ -65,7 +65,7 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
       <mass value="0.8"/>
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
-<collision>
+<collision name="pole_collision">
       <geometry>
         <box size="0.05 0.05 1.0"/>
       </geometry>

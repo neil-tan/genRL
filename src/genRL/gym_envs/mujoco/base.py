@@ -41,11 +41,9 @@ def create_mujoco_vector_entry(EnvClass) -> callable:
         # Determine render mode for workers
         # If recording, workers MUST use rgb_array. Otherwise, use None or specified mode.
         worker_render_mode = "rgb_array" if wandb_video_steps is not None and wandb_video_steps > 0 else None
-        # Allow overriding worker mode if explicitly passed, but warn if incompatible with recording
-        if 'render_mode' in kwargs and worker_render_mode == "rgb_array" and kwargs['render_mode'] != "rgb_array":
-             print(f"[Vector Factory] Warning: Recording requested but render_mode='{kwargs['render_mode']}' passed. Forcing worker render_mode to 'rgb_array'.")
-        elif 'render_mode' in kwargs and worker_render_mode is None:
-             worker_render_mode = kwargs['render_mode'] # Use passed render_mode if not recording
+        # If not recording, allow the passed render_mode to be used for workers if specified
+        if worker_render_mode is None and 'render_mode' in kwargs:
+            worker_render_mode = kwargs['render_mode']
 
         # Create a seed sequence for reproducible seeding of workers
         seed = kwargs.get('seed', None)
