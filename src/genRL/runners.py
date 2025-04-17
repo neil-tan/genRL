@@ -97,11 +97,9 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
                 buffer.add((s, a.detach(), r*config.reward_scale, s_prime, log_prob_a.detach(), done))
                 s = s_prime
 
-                # score and r are already tensors
                 score += r
-                
-                # done is already a tensor
-                if done.all(): # Use .all() to check if all envs terminated
+
+                if done.all():
                     # run.log({"t_end/T_horizon": t/config.T_horizon}) # wandb disabled for now
                     break
 

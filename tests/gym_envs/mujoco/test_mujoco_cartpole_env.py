@@ -5,6 +5,9 @@ import gymnasium as gym
 import numpy as np
 
 def test_env_single():
+    # Set MUJOCO_GL environment variable
+    os.environ['MUJOCO_GL'] = 'egl'
+
     """Test single instance instantiation, step, reset, close."""
     env = gym.make("MujocoCartPole-v0", render_mode="rgb_array", seed=42)
     assert env.action_space.shape == (1,)

@@ -3,6 +3,31 @@ import torch.nn.functional as F
 import torch
 from torch.distributions import Categorical
 
+class SimpleMLP(nn.Module):
+    def __init__(self,
+                 input_dim,
+                 output_dim,
+                 hidden_dim=128,
+                 output_softmax=False,
+                 activation=F.relu,
+                 ):
+        super(SimpleMLP, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.activation = activation
+        self.output_softmax = output_softmax
+        self.output_dim = output_dim
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+    def forward(self, x):
+        x = self.activation(self.fc1(x))
+        logits = self.fc2(x)
+        if self.output_softmax:
+            logits = F.softmax(logits, dim=-1)
+        return logits
+
+
 class SimpleDiscreteMLP(nn.Module):
     def __init__(self,
                  input_dim,

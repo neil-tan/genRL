@@ -8,7 +8,6 @@ import torch # For potential tensor return types
 from gymnasium.vector import SyncVectorEnv # Import for factory
 from gymnasium.wrappers import NumpyToTorch as GymNumpyToTorch # Import for factory
 from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch # Import for factory
-from genRL.gym_envs.base import MujocoEnvMixin
 
 DEFAULT_CAMERA_CONFIG = {
     "trackbodyid": 0,        # id of the body to track (-1 => world, 0 => cart)
@@ -18,7 +17,7 @@ DEFAULT_CAMERA_CONFIG = {
     "azimuth": 180.0,        # camera rotation around the z axis
 }
 
-class MujocoCartPoleEnv(gym.Env, MujocoEnvMixin):
+class MujocoCartPoleEnv(gym.Env):
     metadata = {
         "render_modes": ["human", "rgb_array", "depth_array", "ansi"],
         "render_fps": 100, # Corresponds to model timestep 0.01
@@ -191,25 +190,59 @@ class MujocoCartPoleEnv(gym.Env, MujocoEnvMixin):
 # Factory function to create a single base environment instance
 def create_mujoco_cartpole(**kwargs):
     """Factory function to create a single MujocoCartPoleEnv instance.
-       Accepts kwargs passed from gym.make() and filters them.
+       Filters kwargs to pass only valid arguments to the environment constructor.
     """
-    print(f"[Factory] Creating single MujocoCartPole with kwargs: {kwargs}")
-    
-    # Filter kwargs to only pass known args to the base env
-    allowed_keys = ['seed', 'render_mode', 'xml_file', 'frame_skip', 'camera_config', 'max_force']
+    # Define arguments accepted by MujocoCartPoleEnv.__init__
+    allowed_keys = {'seed', 'render_mode', 'xml_file', 'frame_skip', 'camera_config', 'max_force'}
+
+    # Filter the provided kwargs
     base_kwargs = {k: v for k, v in kwargs.items() if k in allowed_keys}
-    if 'render_mode' not in base_kwargs:
-         base_kwargs['render_mode'] = None
-         
+
     # Create and return the single environment instance
-    env = MujocoCartPoleEnv(**base_kwargs)
-    print("[Factory] Single MujocoCartPoleEnv instance created.")
-    return env
+    return MujocoCartPoleEnv(**base_kwargs)
+
+# Factory function for vectorized environment
+def create_vectorized_mujoco_cartpole(num_envs, device='cpu', **kwargs):
+    """Factory function for creating a vectorized and tensor-wrapped MujocoCartPoleEnv."""
+    
+    # Keys relevant only to the vector env creation or wrappers, not the base env
+    vector_specific_keys = {'num_envs', 'device', 'id', 'seed', 'render_mode'}
+    
+    # Filter kwargs to pass to the base environment constructor
+    base_env_kwargs = {k: v for k, v in kwargs.items() if k not in vector_specific_keys}
+
+    # Create a seed sequence for reproducible seeding of workers
+    seed_sequence = np.random.SeedSequence(kwargs.get('seed'))
+    worker_seeds = seed_sequence.spawn(num_envs)
+
+    # List of functions, each creating one base environment instance
+    env_fns = []
+    for i in range(num_envs):
+        worker_kwargs = base_env_kwargs.copy()
+        # Assign a unique seed to each worker
+        worker_kwargs['seed'] = worker_seeds[i].entropy 
+        # Workers typically don't render to screen; use 'rgb_array' for potential recording
+        worker_kwargs['render_mode'] = "rgb_array" 
+        
+        # Define the function that creates a single environment instance
+        def make_env_fn(local_kwargs):
+            return lambda: create_mujoco_cartpole(**local_kwargs)
+            
+        env_fns.append(make_env_fn(worker_kwargs))
+
+    # Create the synchronous vector environment
+    vec_env = SyncVectorEnv(env_fns)
+
+    # Apply the tensor wrapper for PyTorch compatibility
+    final_env = VectorNumpyToTorch(vec_env, device=device)
+    
+    return final_env
 
 # Register the environment using the simplified factory function
 gym.register(
     id='MujocoCartPole-v0',
-    entry_point=create_mujoco_cartpole, # Use the factory function
+    entry_point=create_mujoco_cartpole, # Factory for single env (gym.make)
+    vector_entry_point=create_vectorized_mujoco_cartpole, # Factory for vectorized env (gym.make_vec)
     max_episode_steps=1000, 
     reward_threshold=950.0, 
-) 
+)
