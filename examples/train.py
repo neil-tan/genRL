@@ -87,3 +87,4 @@ if __name__ == '__main__':
 # TODO:
 #     - Rendering and wandb video handling for vectorized environments
 #     - Add more tests for mujoco training
+#     - Mujoco vector or single env wrapper -> base.py -> function factory
