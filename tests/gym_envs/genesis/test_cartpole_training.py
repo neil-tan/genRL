@@ -48,8 +48,8 @@ def run_training(config):
 # Using a single test with parametrize to cover both algorithms
 @pytest.mark.parametrize("algo_config", [
     # n_epi=4, report_interval=4 means callback only at n_epi=4
-    PPOConfig(n_epi=4, num_envs=8, report_interval=4),
-    GRPOConfig(n_epi=4, num_envs=64, report_interval=4)
+    PPOConfig(n_epi=10, num_envs=8, report_interval=5),
+    GRPOConfig(n_epi=6, num_envs=64, report_interval=3)
 ])
 def test_training_reward_snapshot(snapshot, algo_config):
     """Test that training rewards match the stored snapshot."""

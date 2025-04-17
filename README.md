@@ -131,7 +131,7 @@ Snapshot tests verify that training behavior remains consistent by comparing cur
 
 - **Creating/Updating Snapshots**:
   ```bash
-  pytest tests/gym_envs/genesis/test_cartpole_training.py --snapshot-update
+  pytest tests/gym_envs/genesis/test_cartpole_training.py -s --snapshot-update
   ```
   Use this when:
   - Setting up tests for the first time
@@ -139,7 +139,7 @@ Snapshot tests verify that training behavior remains consistent by comparing cur
   - Modifying test parameters
 
 - **Snapshot Files**:
-  - Located in the `snapshots` directory
+  - Located in the `tests/snapshots` directory
   - Should be committed to the repository
   - Serve as the "ground truth" for regression testing
 

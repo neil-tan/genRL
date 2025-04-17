@@ -109,10 +109,10 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
         model.train_net(buffer)
         buffer.clear()
 
-        if n_epi%report_interval==0:
+        if (n_epi+1)%report_interval==0 or n_epi==0:
             interval_score = (score/report_interval)
             interval_mean_score = (score/report_interval).mean()
-            epi_bar.write(f"n_epi: {n_epi}, score: {interval_mean_score}")
+            epi_bar.write(f"n_epi: {n_epi+1}, score: {interval_mean_score}")
             run.log({"rewards histo": wandb.Histogram(interval_score.cpu()), "mean reward": interval_mean_score.cpu()})
             if epi_callback is not None:
                 epi_callback(n_epi, interval_mean_score)
