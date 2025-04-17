@@ -25,19 +25,32 @@ class MujocoCartPoleEnv(gym.Env):
         self,
         frame_skip: int = 1,
         render_mode=None,
-        xml_file: str = os.path.join(os.path.dirname(__file__), "../../../../assets/mujoco/cartpole.xml"),
-        # num_envs=1, # MuJoCo standard practice is external vectorization
-        # return_tensor=False, # Will return numpy arrays by default
+        # Change default to point to the URDF file
+        xml_file: str = os.path.join(os.path.dirname(__file__), "../../../../assets/urdf/cartpole.urdf"), 
         seed=None,
         camera_config=None,
-        max_force = 100.0, # Match XML? XML uses gear="100" with ctrlrange -1 to 1 effective force?
-                           # Let's use this to scale action later.
+        max_force = 100.0,
+        **kwargs, # Keep kwargs
     ):
+        print(f"[MujocoCartPoleEnv] Loading model from: {xml_file}") # Add print to confirm path
         self.xml_file = xml_file
-        self.model = mujoco.MjModel.from_xml_path(self.xml_file)
+        try:
+            self.model = mujoco.MjModel.from_xml_path(self.xml_file)
+        except Exception as e:
+            print(f"Error loading model from {self.xml_file}: {e}")
+            # Attempt to load the original XML as a fallback for debugging
+            fallback_xml = os.path.join(os.path.dirname(__file__), "../../../../assets/mujoco/cartpole.xml")
+            print(f"Attempting fallback load from: {fallback_xml}")
+            try:
+                 self.model = mujoco.MjModel.from_xml_path(fallback_xml)
+                 print("Fallback XML loaded successfully.")
+            except Exception as fallback_e:
+                 print(f"Fallback XML load failed: {fallback_e}")
+                 raise e # Re-raise the original error
+                 
         self.data = mujoco.MjData(self.model)
         self.viewer = None
-        self.renderer = None
+        self.renderer = None # Ensure renderer is initialized here
 
         self.frame_skip = frame_skip
         self.max_force = max_force
@@ -75,6 +88,8 @@ class MujocoCartPoleEnv(gym.Env):
 
         self._camera_config = camera_config if camera_config is not None else DEFAULT_CAMERA_CONFIG
 
+        # --- Remove Video Recording Attributes ---
+
         self.seed(seed)
 
     def seed(self, seed=None):
@@ -89,10 +104,16 @@ class MujocoCartPoleEnv(gym.Env):
         return np.array([position[0], velocity[0], position[1], velocity[1]], dtype=np.float64)
 
     def _apply_action(self, action):
-        # Apply force to the slider joint (cart)
-        # Action is expected to be [-1, 1]
+        # Apply force directly to the slider joint's degree of freedom
+        # Assumes the slider joint ('slider_to_cart' from URDF) is the first DoF (index 0)
         force = action[0] * self.max_force
-        self.data.ctrl[0] = force
+        # Check if qfrc_applied exists and has the expected size
+        if hasattr(self.data, 'qfrc_applied') and self.data.qfrc_applied.shape[0] > 0:
+             self.data.qfrc_applied[0] = force
+        else:
+             # This might happen if the URDF parsing leads to unexpected DoF setup
+             print("[MujocoCartPoleEnv] Warning: qfrc_applied not available or empty. Cannot apply force.")
+        # self.data.ctrl[0] = force # Old method using actuator control
 
     def step(self, action):
         self._apply_action(action)
@@ -112,7 +133,7 @@ class MujocoCartPoleEnv(gym.Env):
         truncated = False # Not using time limits here, handled by wrappers usually
         info = {}
 
-        if self.render_mode == "human":
+        if self.render_mode == "human": # Render human mode if not recording rgb
             self.render()
 
         return observation, reward, terminated, truncated, info
@@ -168,7 +189,8 @@ class MujocoCartPoleEnv(gym.Env):
             return None
         elif self.render_mode == "rgb_array":
             self.renderer.update_scene(self.data)
-            return self.renderer.render()
+            # Return the frame directly for recording
+            return self.renderer.render() 
         elif self.render_mode == "depth_array":
             self.renderer.update_scene(self.data, scene_option=mujoco.MjvOption().flags[mujoco.mjtVisFlag.mjVIS_Depth])
             return self.renderer.render()
@@ -183,6 +205,7 @@ class MujocoCartPoleEnv(gym.Env):
         if self.renderer:
             self.renderer.close()
             self.renderer = None
+        
         # No explicit close needed for model/data in mujoco-python > 3.0
 
 
