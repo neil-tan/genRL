@@ -13,6 +13,7 @@ from genesis.utils.misc import get_platform
 import tyro
 from genRL.configs import SessionConfig
 from gymnasium.vector import AsyncVectorEnv, SyncVectorEnv
+from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch
 
 # python examples/train.py algo:grpo-config --algo.n_epi 65
 # python examples/train.py algo:ppo-config --algo.n_epi 185
@@ -69,6 +70,9 @@ def main():
         make_env(args.random_seed + i, worker_render_mode) # Don't pass device
         for i in range(config.num_envs)
     ])
+    
+    # Wrap the vectorized environment to convert outputs to tensors
+    envs = VectorNumpyToTorch(envs, device=device)
     
     # env = gym.make("GenCartPole-v0",
     # # env = gym.make("GenCartPole-v0-dummy-ones",

@@ -94,24 +94,22 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
 
         with torch.no_grad():
             for t in trange(config.T_horizon, desc="env", leave=False):
-                # Convert state s (numpy array) to tensor before passing to model
-                s_tensor = torch.from_numpy(s).float().to(device)
-                prob = model.pi(s_tensor)
+                # Env now returns tensors, no conversion needed for s
+                prob = model.pi(s)
                 m = Categorical(prob)
                 a = m.sample().unsqueeze(-1)
-                # Convert action tensor back to numpy for env.step
-                a_np = a.cpu().numpy()
-                s_prime, r, done, truncated, info = env.step(a_np)
+                # Env now expects tensors (converted back to numpy inside wrapper's step)
+                s_prime, r, done, truncated, info = env.step(a)
 
                 prob_a = torch.gather(prob, -1, a)
-                # Convert numpy r, s_prime, done to tensors for buffer
-                buffer.add((s_tensor, a.detach(), torch.from_numpy(r).float().to(device)*config.reward_scale, torch.from_numpy(s_prime).float().to(device), prob_a.detach(), torch.from_numpy(done).bool().to(device)))
-                s = s_prime # Keep s as numpy array for the start of the next loop
+                # s, r, s_prime, done are already tensors
+                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
+                s = s_prime # s is already a tensor
 
-                # Convert numpy reward r to tensor for score calculation
-                score += torch.from_numpy(r).float().to(device)
+                # score and r are already tensors
+                score += r
                 
-                # done is numpy array, check if all are done
+                # done is already a tensor
                 if done.all(): # Use .all() to check if all envs terminated
                     # run.log({"t_end/T_horizon": t/config.T_horizon}) # wandb disabled for now
                     break
