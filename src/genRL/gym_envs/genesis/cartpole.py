@@ -7,10 +7,9 @@ from gymnasium import spaces
 import torch
 import wandb
 import tempfile
-from genRL.utils import downsample_list_image_to_video_array, move_to_device
-from genRL.gym_envs.base import GenesisEnvMixin
+from genRL.utils import downsample_list_image_to_video_array, auto_pytorch_device, debug_print
 # %%
-class GenCartPoleEnv(gym.Env, GenesisEnvMixin):
+class GenCartPoleEnv(gym.Env):
     metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
 
     def __init__(self,
@@ -38,7 +37,7 @@ class GenCartPoleEnv(gym.Env, GenesisEnvMixin):
         self.max_force = max_force
         self.step_scaler = step_scaler
         self.current_steps_count = 0
-        self.device = "cpu" if gs_backend == gs.cpu else "cuda"
+        self.device = auto_pytorch_device(gs_backend)
 
         self.done = torch.zeros((self.num_envs, 1), dtype=torch.bool, device=self.device)
 
@@ -46,7 +45,7 @@ class GenCartPoleEnv(gym.Env, GenesisEnvMixin):
         self.observation_space = spaces.Box(np.array([-4.8000002e+00, -np.inf, -4.1887903e-01, -np.inf]),
                                             np.array([4.8000002e+00, np.inf, 4.1887903e-01, np.inf]), (4,), np.float32)
         
-        self.action_space = spaces.Discrete(1)
+        self.action_space = spaces.Discrete(2)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -167,12 +166,18 @@ class GenCartPoleEnv(gym.Env, GenesisEnvMixin):
 
         self.scene.reset(self._init_state)
         
+        # Print shapes and dtypes for debugging Genesis API usage
         jnt_names = ['slider_to_cart', 'cart_to_pole']
         dofs_idx = [self.cartpole.get_joint(name).dof_idx_local for name in jnt_names]
-
-        # vectorized
+        # Use debug_print instead of print
+        debug_print(f"dofs_idx: {dofs_idx}, type: {type(dofs_idx)}")
         random_positions = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
         random_velocities = (torch.rand((self.num_envs, 2)) - 0.5) * 0.05
+        # Use debug_print instead of print
+        debug_print(f"random_positions shape: {random_positions.shape}, dtype: {random_positions.dtype}")
+        debug_print(f"random_velocities shape: {random_velocities.shape}, dtype: {random_velocities.dtype}")
+        debug_print(f"random_positions numpy shape: {random_positions.cpu().numpy().shape}, dtype: {random_positions.cpu().numpy().dtype}")
+        debug_print(f"random_velocities numpy shape: {random_velocities.cpu().numpy().shape}, dtype: {random_velocities.cpu().numpy().dtype}")
         
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)

@@ -1,14 +1,10 @@
 import genRL.gym_envs.genesis.cartpole
 import genRL.gym_envs.test_envs.cartpole_dummy
-from genRL.utils import is_cuda_available
 import gymnasium as gym
 import torch
-import torch.nn.functional as F
-from torch.distributions import Categorical
 from genRL.configs import PPOConfig, GRPOConfig
 import genesis as gs
 import sys
-import numpy as np
 import wandb
 from tqdm import trange
 import optuna
@@ -16,6 +12,7 @@ from dataclasses import replace, asdict
 from genRL.rl.agents import ppo_agent, grpo_agent
 from typing import Union
 from genRL.rl.buffers import SimpleBuffer
+from genRL.utils import is_cuda_available
 
 def config_ppo_search_space(trial, config:PPOConfig):
     search_space = {
@@ -84,7 +81,7 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
         model.compile()
     
     score = torch.zeros(config.num_envs, device=device)
-    report_interval = min(20, config.n_epi-1)
+    report_interval = min(config.report_interval, config.n_epi-1)
     interval_mean_score = None
 
     epi_bar = trange(config.n_epi, desc="n_epi")
@@ -94,17 +91,11 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
 
         with torch.no_grad():
             for t in trange(config.T_horizon, desc="env", leave=False):
-                # Env now returns tensors, no conversion needed for s
-                prob = model.pi(s)
-                m = Categorical(prob)
-                a = m.sample().unsqueeze(-1)
-                # Env now expects tensors (converted back to numpy inside wrapper's step)
+                a, log_prob_a, _ = model.pi.sample_action(s)
                 s_prime, r, done, truncated, info = env.step(a)
 
-                prob_a = torch.gather(prob, -1, a)
-                # s, r, s_prime, done are already tensors
-                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, prob_a.detach(), done))
-                s = s_prime # s is already a tensor
+                buffer.add((s, a.detach(), r*config.reward_scale, s_prime, log_prob_a.detach(), done))
+                s = s_prime
 
                 # score and r are already tensors
                 score += r
@@ -117,10 +108,10 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
         model.train_net(buffer)
         buffer.clear()
 
-        if n_epi%report_interval==0 and n_epi!=0:
+        if (n_epi+1)%report_interval==0 or n_epi==0:
             interval_score = (score/report_interval)
             interval_mean_score = (score/report_interval).mean()
-            epi_bar.write(f"n_epi: {n_epi}, score: {interval_mean_score}")
+            epi_bar.write(f"n_epi: {n_epi+1}, score: {interval_mean_score}")
             run.log({"rewards histo": wandb.Histogram(interval_score.cpu()), "mean reward": interval_mean_score.cpu()})
             if epi_callback is not None:
                 epi_callback(n_epi, interval_mean_score)
@@ -164,12 +155,12 @@ def objective(trial,
                    wandb_video_steps=config.wandb_video_steps,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=config.random_seed,
+                   seed=session_config.random_seed,
                    )
     
     env.reset()
     
-    agent = get_agent(config)
+    agent = get_agent(env, config)
 
     result = training_loop(env, agent, config, run, epi_callback, compile=True)
 
@@ -178,13 +169,13 @@ def objective(trial,
     
     return result
 
-def get_agent(config: Union[PPOConfig, GRPOConfig]) -> Union[ppo_agent, grpo_agent]:
+def get_agent(env, config: Union[PPOConfig, GRPOConfig]) -> Union[ppo_agent, grpo_agent]:
     """
     Returns the agent based on the config type.
     """
     if isinstance(config, PPOConfig):
-        return ppo_agent(config)
+        return ppo_agent(env, config)
     elif isinstance(config, GRPOConfig):
-        return grpo_agent(config)
+        return grpo_agent(env, config)
     else:
         raise ValueError(f"Unexpected algo type: {config}")

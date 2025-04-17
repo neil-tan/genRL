@@ -2,7 +2,6 @@
 
 ## Installation
 Install the prerequisites, create a virtual environment using minconda and pyenv. Click on the tabs below to see the instructions for your OS.
-
 <details>
   <summary>Linux</summary>
 We will install Miniconda as a part of Pyenv, and create a virtual environment for the package.
@@ -104,7 +103,11 @@ pip install -e .
 ### Run Example
 A simple Cartpole PPO example:
 ```bash
-python examples/train.py algo:ppo-config --algo.n_epi 185
+python examples/train.py algo:ppo-config --algo.n_epi 185 --wandb disabled
+```
+Running GRPO with Wandb logging:
+```bash
+python examples/train.py algo:grpo-config --algo.n_epi 60
 ```
 
 Hyperparameter sweeping example:
@@ -131,7 +134,7 @@ Snapshot tests verify that training behavior remains consistent by comparing cur
 
 - **Creating/Updating Snapshots**:
   ```bash
-  pytest tests/gym_envs/genesis/test_cartpole_training.py --snapshot-update
+  pytest tests/gym_envs/genesis/test_cartpole_training.py -s --snapshot-update
   ```
   Use this when:
   - Setting up tests for the first time
@@ -139,7 +142,7 @@ Snapshot tests verify that training behavior remains consistent by comparing cur
   - Modifying test parameters
 
 - **Snapshot Files**:
-  - Located in the `snapshots` directory
+  - Located in the `tests/snapshots` directory
   - Should be committed to the repository
   - Serve as the "ground truth" for regression testing
 

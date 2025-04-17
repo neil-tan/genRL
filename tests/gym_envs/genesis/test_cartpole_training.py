@@ -28,7 +28,7 @@ def run_training(config):
                    seed=42)
     
     # Get agent
-    agent = get_agent(config)
+    agent = get_agent(env, config) # Pass env here
     agent.set_run(wandb.run)  # Set wandb run for logging
     
     # Run training using training_loop
@@ -48,13 +48,13 @@ def run_training(config):
 # Using a single test with parametrize to cover both algorithms
 @pytest.mark.parametrize("algo_config", [
     # n_epi=4, report_interval=4 means callback only at n_epi=4
-    PPOConfig(n_epi=4, num_envs=8, report_interval=4),
-    GRPOConfig(n_epi=4, num_envs=64, report_interval=4)
+    PPOConfig(n_epi=10, num_envs=8, report_interval=5),
+    GRPOConfig(n_epi=6, num_envs=64, report_interval=3)
 ])
 def test_training_reward_snapshot(snapshot, algo_config):
     """Test that training rewards match the stored snapshot."""
     # Set snapshot directory relative to test file
-    snapshot.snapshot_dir = 'snapshots'
+    snapshot.snapshot_dir = 'tests/snapshots'
     
     reward_history = run_training(algo_config)
 
@@ -62,12 +62,3 @@ def test_training_reward_snapshot(snapshot, algo_config):
     # The snapshot filename will include the parametrization details
     # Convert numpy array to bytes for snapshot comparison
     snapshot.assert_match(reward_history.tobytes(), f'{type(algo_config).__name__}_reward_history.npy')
-
-# Remove old tests
-# @pytest.mark.parametrize("algo_config", [...])
-# def test_training_reward_increase(algo_config):
-#     ...
-
-# @pytest.mark.parametrize("algo_config,expected_min_reward", [...])
-# def test_training_reward_threshold(algo_config, expected_min_reward):
-#     ... 

@@ -1,16 +1,6 @@
 import gymnasium as gym
 from gymnasium.vector import SyncVectorEnv
 from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch
-import torch
-
-class BaseEnv:
-    pass
-
-class MujocoEnvMixin(BaseEnv):
-    pass
-
-class GenesisEnvMixin(BaseEnv):
-    pass
 
 def wrap_env_for_training(env_id, base_env, num_envs, device):
     """Applies vectorization and tensor wrapping for non-Genesis envs.

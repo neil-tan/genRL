@@ -15,8 +15,9 @@ import gymnasium as gym
 import genesis as gs
 from genRL.utils import is_cuda_available
 
-# python examples/train.py --env-id MujocoCartPole-v0 algo:ppo-config --algo.n-epi 100
-# python examples/train.py --env-id GenCartPole-v0 algo:ppo-config --algo.n-epi 100
+# python examples/train.py algo:grpo-config --algo.n_epi 60
+# python examples/train.py algo:ppo-config --algo.n_epi 180
+# python examples/train.py algo:ppo-config --algo.n_epi 180 --wandb disabled
 
 def main():
     args = tyro.cli(
@@ -35,15 +36,13 @@ def main():
     # If not, it uses the default_factory in SessionConfig.
     config = args.algo
     
-    agent = get_agent(config)
-    
-    # Restore wandb init - use WANDB_MODE=disabled env var to disable
     wandb.login()
     run = wandb.init(
                     project=args.project_name,
                     name=f"{args.env_id}-{args.run_name}", # Include env_id in run name
                     config=config,
-                    # mode="disabled", # Add this via command line or env var if needed
+                    mode=args.wandb,
+                    # mode="disabled", # dev dry-run
                 )
     
     # --- Environment Creation Logic ---
@@ -95,17 +94,8 @@ def main():
     # Determine device based on availability
     device = "cuda" if is_cuda_available() else "cpu"
     
-    # envs.reset() # Reset is typically handled within the training loop
-
-    if not is_genesis_env:
-        # For non-Genesis environments, apply necessary wrapping
-        envs = wrap_env_for_training(args.env_id, envs, config.num_envs, device)
-    # Genesis environments handle their own wrapping/tensor returns internally
-    # No wrapping needed here for them.
-    
-    # --- End Environment Creation Logic ---
-    
-    # envs.reset() # Reset is typically handled within the training loop
+    agent = get_agent(envs, config)
+    envs.reset()
 
     if get_platform() == "macOS" and sys.gettrace() is None:
         gs.tools.run_in_another_thread(fn=training_loop, args=(envs, agent, config, run))
