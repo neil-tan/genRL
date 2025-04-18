@@ -1,161 +1,380 @@
 # tests/test_wandb_logging.py
 import subprocess
-# import wandb # Keep for potential future local file parsing, but API won't be used # Commented out as API object not needed
+import wandb
 import time
 import pytest
 import re
 import os
-import glob
-import json # For potentially reading summary files
 
-# Define the path to the training script relative to the workspace root
-# TRAIN_SCRIPT_PATH = "examples/train.py" # No longer needed
-TRAIN_SCRIPT_MODULE = "examples.train" # Define module path
-# Use a specific project name for testing (less relevant in offline mode, but good practice)
-# TEST_PROJECT_NAME = "genrl-test-logging" # Keep original or use offline specific? Let's keep original for now.
+# Set MUJOCO_GL environment variable to ensure proper rendering
+os.environ['MUJOCO_GL'] = 'egl'
+
+# Define constants for test configuration
+TRAIN_SCRIPT_PATH = "examples/train.py"
 TEST_PROJECT_NAME = "genrl-test-logging" 
-TEST_RUN_NAME_BASE = "test-log-run" # Keep original base name
+TEST_RUN_NAME_BASE = "test-log-run"
+API_RETRY_COUNT = 5
+API_RETRY_DELAY = 10
+TEST_TIMEOUT = 180
 
-# @pytest.mark.skipif(os.getenv("WANDB_API_KEY") is None, reason="Requires WANDB_API_KEY environment variable") # REMOVED this line
-def test_train_script_logs_metrics_and_video(): # Original function name, now runs offline
+def fetch_wandb_runs_with_retries(project=TEST_PROJECT_NAME, entity=None, max_retries=API_RETRY_COUNT, delay=API_RETRY_DELAY):
     """
-    Tests if the train.py script logs expected metrics (implicitly by checking summary) 
-    and a video file to a local offline Wandb directory when --record-video is enabled.
+    Helper function to fetch recent wandb runs for a project with retries.
+    Returns list of run objects or raises exception if all retries fail.
     """
-    run_name = f"{TEST_RUN_NAME_BASE}-offline-{int(time.time())}" # Adjusted name slightly for clarity
-    n_epi = 5 # Keep low for quick test
-    report_interval = 2 # Ensure at least one report happens
-    start_time = time.time() # Record time before running the script
+    api = wandb.Api(timeout=60)
+    entity = entity or api.default_entity
+    project_path = f"{entity}/{project}"
     
-    # Command to run the training script as a module
+    for attempt in range(max_retries):
+        try:
+            # Get the most recent runs from the project
+            runs = api.runs(project_path, per_page=10)
+            if runs:
+                return runs
+            
+            print(f"No runs found in project. Retrying... ({attempt+1}/{max_retries})")
+                
+        except Exception as e:
+            print(f"Error fetching wandb runs (attempt {attempt+1}): {e}")
+        
+        # Sleep before retry if not the last attempt
+        if attempt < max_retries - 1:
+            time.sleep(delay)
+    
+    # If we get here, all retries failed
+    raise RuntimeError(f"Failed to fetch runs after {max_retries} attempts")
+
+def fetch_run_data_with_retries(run, keys=None, max_retries=API_RETRY_COUNT, delay=API_RETRY_DELAY):
+    """
+    Helper function to fetch history data for a wandb run with retries.
+    Returns the run history or raises exception if all retries fail.
+    """
+    for attempt in range(max_retries):
+        try:
+            history = list(run.scan_history(keys=keys)) if keys else list(run.scan_history())
+            
+            # Return immediately if we find the data we're looking for
+            if history and (not keys or all(any(k in record for record in history) for k in keys)):
+                return history
+                
+            # If we have history but not all expected keys, log and continue retrying
+            if history:
+                print(f"Run data found but missing required keys. Retrying... ({attempt+1}/{max_retries})")
+            else:
+                print(f"Run history is empty. Retrying... ({attempt+1}/{max_retries})")
+                
+        except Exception as e:
+            print(f"Error fetching history for run {run.id} (attempt {attempt+1}): {e}")
+        
+        # Sleep before retry if not the last attempt
+        if attempt < max_retries - 1:
+            time.sleep(delay)
+    
+    # If we get here, all retries failed
+    raise RuntimeError(f"Failed to fetch history data after {max_retries} attempts")
+
+def check_for_video_content(run, max_retries=API_RETRY_COUNT, delay=API_RETRY_DELAY):
+    """
+    Check if a W&B run has video content, either as files or media table entries.
+    Returns True if videos are found, False otherwise.
+    """
+    for attempt in range(max_retries):
+        try:
+            # Get run summary to check for media tables
+            summary_dict = run.summary._json_dict
+            
+            # Check for media tables that might contain videos
+            media_keys = [k for k, v in summary_dict.items() 
+                         if isinstance(v, dict) and v.get('_type') in ['video-file', 'table-file']]
+                         
+            # Check for direct video references in summary
+            video_keys = [k for k, v in summary_dict.items() 
+                         if isinstance(v, dict) and v.get('_type') == 'video-file']
+            
+            # Check for media logs in the history
+            history = list(run.scan_history(keys=["video", "single_env_video"]))
+            has_video_in_history = any("video" in record or "single_env_video" in record for record in history)
+            
+            # Check for actual files with video extensions
+            files = run.files()
+            video_files = [f for f in files if f.name.endswith(('.mp4', '.avi', '.mov', '.webm'))]
+            
+            if video_keys or media_keys or has_video_in_history or video_files:
+                # Print what we found for debugging
+                if video_keys:
+                    print(f"Found {len(video_keys)} video keys in summary: {video_keys}")
+                if media_keys:
+                    print(f"Found {len(media_keys)} media keys in summary: {media_keys}")
+                if has_video_in_history:
+                    print("Found video references in history")
+                if video_files:
+                    print(f"Found {len(video_files)} video files: {[f.name for f in video_files]}")
+                return True
+                
+            print(f"No video content found in run {run.id}. Retrying... ({attempt+1}/{max_retries})")
+            
+        except Exception as e:
+            print(f"Error checking for video content in run {run.id} (attempt {attempt+1}): {e}")
+        
+        # Sleep before retry if not the last attempt
+        if attempt < max_retries - 1:
+            time.sleep(delay)
+    
+    # If we get here, all retries failed or no videos found
+    return False
+
+def extract_run_id_from_output(output):
+    """Extract the wandb run ID from process output"""
+    # Look for multiple possible formats of wandb ID in output
+    patterns = [
+        r"WANDB_RUN_ID:(\w+)",  # Explicit WANDB_RUN_ID format
+        r"wandb: Run data is saved locally in ([^\s]+)",  # Path format
+        r"wandb: Synced [^:]+ https://wandb.ai/[^/]+/[^/]+/runs/([^/]+)",  # URL format
+        r"run-(\w+)"  # Common run ID pattern
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, output)
+        if match:
+            # If the match is a path containing a run ID, extract just the ID
+            run_id = match.group(1)
+            if "/" in run_id:
+                # Extract run ID from path if needed
+                path_match = re.search(r"run-(\w+)", run_id)
+                if path_match:
+                    return path_match.group(1)
+            return run_id
+    
+    return None
+
+@pytest.mark.skipif(os.getenv("WANDB_API_KEY") is None, reason="Requires WANDB_API_KEY environment variable")
+def test_train_script_logs_metrics_and_videos():
+    """Tests if the train.py script logs expected metrics and videos to Wandb."""
+    # Setup test parameters with timestamp for uniqueness
+    timestamp = int(time.time())
+    run_name = f"{TEST_RUN_NAME_BASE}-{timestamp}"
+    env_id = "GenCartPole-v0"  # Use Genesis environment by default
+    
+    # Use small wandb_video_steps to ensure videos are captured within our short test
+    video_steps = 5  # Small number to trigger videos frequently
     command = [
-        "python", "-m", TRAIN_SCRIPT_MODULE, # Use -m and module path
-        "--project-name", TEST_PROJECT_NAME, # Use original project name
+        "python", TRAIN_SCRIPT_PATH,
+        "--project-name", TEST_PROJECT_NAME,
         "--run-name", run_name,
-        "--env-id", "GenCartPole-v0", 
-        "algo:ppo-config", 
-        "--algo.n-epi", str(n_epi),
-        "--algo.report-interval", str(report_interval),
-        "--record-video",
-        "--wandb-mode", "offline" # Run in offline mode
+        "--env-id", env_id,
+        "--wandb-video-steps", str(video_steps),
+        "algo:ppo-config",
+        "--algo.n-epi", "10",  # Run for enough episodes to generate videos
+        "--algo.report-interval", "2"  # Ensure frequent reporting
     ]
 
-    run_id = None
-    process_output = ""
+    # Run the training script and capture output
     try:
-        print(f"\nRunning command: {' '.join(command)}")
-        
-        # --- Set PYTHONPATH for subprocess ---
-        env = os.environ.copy()
-        # Construct absolute path to src directory relative to this test file
-        src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')) 
-        env['PYTHONPATH'] = f"{src_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
-        print(f"Setting PYTHONPATH for subprocess: {env['PYTHONPATH']}")
-        # --- End Set PYTHONPATH ---
-
-        # Run the training script as a subprocess with modified environment
+        print(f"Running command: {' '.join(command)}")
         result = subprocess.run(
             command, 
             capture_output=True, 
             text=True, 
             check=True, 
-            timeout=180,
-            env=env # Pass the modified environment
-        ) 
+            timeout=TEST_TIMEOUT
+        )
         process_output = result.stdout + "\n" + result.stderr
-        print("--- Script Output ---")
-        print(process_output)
-        print("--- End Script Output ---")
-
-        # Extract the run ID printed by train.py (useful for finding the directory)
-        # Assuming train.py still prints this, even in offline mode
-        match = re.search(r"WANDB_RUN_ID:(\w+)", process_output)
-        if match:
-            run_id = match.group(1)
-            print(f"Extracted WANDB_RUN_ID: {run_id}")
-        else:
-            # Fallback: try to find the latest offline directory if ID isn't printed
-            print("WANDB_RUN_ID not found in script output. Will try to find the latest offline directory.")
-            
+        print(f"Training completed. Output excerpt: {process_output[:200]}...")
     except subprocess.CalledProcessError as e:
-        print("--- Subprocess Error Output ---")
-        print(e.stdout)
-        print(e.stderr)
-        print("--- End Subprocess Error Output ---")
-        pytest.fail(f"Training script failed with error: {e}")
+        process_output = f"{e.stdout or ''}\n{e.stderr or ''}"
+        pytest.fail(f"Training script failed with error: {e}\nOutput: {process_output}")
     except subprocess.TimeoutExpired as e:
-        print("--- Subprocess Timeout Output ---")
-        if e.stdout: print(e.stdout.decode())
-        if e.stderr: print(e.stderr.decode())
-        print("--- End Subprocess Timeout Output ---")
-        pytest.fail(f"Training script timed out after 180 seconds.")
-    except Exception as e:
-        pytest.fail(f"An unexpected error occurred during script execution: {e}")
-
-    # Verify logging by checking the local offline directory
+        process_output = f"{e.stdout.decode() if e.stdout else ''}\n{e.stderr.decode() if e.stderr else ''}"
+        pytest.fail(f"Training script timed out after {TEST_TIMEOUT} seconds.\nOutput: {process_output}")
     
-    # Find the correct offline directory
-    offline_run_dir = None
-    wandb_base_dir = "wandb" # Assuming default wandb directory
-    if run_id:
-        # Try finding the directory using the run_id
-        possible_dirs = glob.glob(os.path.join(wandb_base_dir, f"offline-run-*-{run_id}"))
-        if possible_dirs:
-            # Sort by modification time just in case there are multiple matches (shouldn't happen often)
-            possible_dirs.sort(key=os.path.getmtime, reverse=True)
-            offline_run_dir = possible_dirs[0] 
-            print(f"Found offline directory using run_id: {offline_run_dir}")
-        else:
-            print(f"Could not find offline directory for run_id {run_id}. Will try finding the latest.")
-
-    if not offline_run_dir:
-        # Find the latest offline directory created after the test started
-        all_offline_dirs = glob.glob(os.path.join(wandb_base_dir, "offline-run-*"))
-        latest_dir = None
-        latest_mtime = start_time 
-        for d in all_offline_dirs:
-            try:
-                mtime = os.path.getmtime(d)
-                if mtime >= latest_mtime: # Use >= to catch runs started exactly at start_time
-                    latest_mtime = mtime
-                    latest_dir = d
-            except OSError:
-                continue # Ignore if directory disappears or permissions issue
-        
-        if latest_dir:
-            offline_run_dir = latest_dir
-            print(f"Found latest offline directory (created after test start): {offline_run_dir}")
-        else:
-             pytest.fail("Could not find a suitable offline Wandb run directory.")
-
-    assert offline_run_dir is not None, "Failed to identify the offline run directory."
-    assert os.path.isdir(offline_run_dir), f"Offline run directory {offline_run_dir} does not exist or is not a directory."
-
-    # Verify video logging
-    print(f"Checking for video file in {offline_run_dir}...")
-    video_dir = os.path.join(offline_run_dir, "files", "videos")
-    video_files = glob.glob(os.path.join(video_dir, "*.mp4"))
+    # Extract run ID from output
+    run_id = extract_run_id_from_output(process_output)
+    assert run_id, "Failed to extract WANDB_RUN_ID from script output"
+    print(f"Extracted W&B run ID: {run_id}")
     
-    assert video_files, f"No .mp4 video file found in {video_dir}."
-    print(f"Successfully verified video logging. Found: {video_files[0]}")
-
-    # Optional: Verify metric logging by checking for summary file
-    summary_file_path = os.path.join(offline_run_dir, "files", "wandb-summary.json")
-    print(f"Checking for summary file: {summary_file_path}...")
-    assert os.path.isfile(summary_file_path), f"Summary file not found at {summary_file_path}."
-    
-    # Optionally, check content:
+    # Connect to the run directly using its ID
     try:
-        with open(summary_file_path, 'r') as f:
-            summary_data = json.load(f)
-        # Check if a key typically logged exists (e.g., related to reward or steps)
-        # Note: Exact keys depend on what train.py logs to summary
-        assert any(k.endswith("reward") or k.endswith("step") or k.endswith("loss") or k == "_timestamp" for k in summary_data.keys()), \
-            f"No expected metric keys (like reward, step, loss) found in summary file: {summary_file_path}"
-        print(f"Successfully verified summary file exists and contains expected key patterns.")
-    except (json.JSONDecodeError, FileNotFoundError, AssertionError) as e:
-         pytest.fail(f"Failed to verify summary file content: {e}")
+        api = wandb.Api(timeout=60)
+        entity = api.default_entity
+        run_path = f"{entity}/{TEST_PROJECT_NAME}/{run_id}"
+        run = api.run(run_path)
+        
+        # Verify wandb metrics were logged
+        history = fetch_run_data_with_retries(run, keys=["mean reward", "_step"])
+        
+        # Verify expected metrics exist
+        assert any("mean reward" in record for record in history), \
+            f"Metric 'mean reward' not found in Wandb run history for run {run_id}"
+            
+        print(f"Successfully verified 'mean reward' logging for run: {run_id}")
+        
+        # Allow some time for videos to be processed by W&B
+        print("Waiting for W&B to process videos...")
+        time.sleep(15)
+        
+        # Verify video files were uploaded
+        print(f"Checking for video content in run: {run_id}")
+        has_videos = check_for_video_content(run, max_retries=8, delay=10)
+        
+        assert has_videos, f"No video content found in Wandb run {run_id}"
+        print(f"Successfully verified video uploads for run: {run_id}")
+        
+        # Clean up test run (optional - uncomment if needed)
+        # run.delete()
+        
+    except Exception as e:
+        pytest.fail(f"Error verifying wandb metrics or videos: {e}")
 
-    print(f"Successfully verified offline logging for run in directory: {offline_run_dir}")
+@pytest.mark.skipif(os.getenv("WANDB_API_KEY") is None, reason="Requires WANDB_API_KEY environment variable")
+def test_mujoco_video_logging():
+    """Test that videos are properly logged with Mujoco environment."""
+    # Setup test parameters with timestamp for uniqueness
+    timestamp = int(time.time())
+    run_name = f"{TEST_RUN_NAME_BASE}-mujoco-{timestamp}"
+    env_id = "MujocoCartPole-v0"  # Use Mujoco environment specifically
+    
+    # Use small wandb_video_steps to ensure videos are captured within our short test
+    video_steps = 5  # Small number to trigger videos frequently
+    command = [
+        "python", TRAIN_SCRIPT_PATH,
+        "--project-name", TEST_PROJECT_NAME,
+        "--run-name", run_name,
+        "--env-id", env_id,
+        "--wandb-video-steps", str(video_steps),
+        "--record-video", "true",  # Explicitly enable video recording
+        "algo:ppo-config",
+        "--algo.n-epi", "10",  # Run for enough episodes to generate videos
+        "--algo.report-interval", "2"  # Ensure frequent reporting
+    ]
 
-    # No cleanup needed for offline runs unless explicitly desired
+    # Run the training script and capture output
+    try:
+        print(f"Running command: {' '.join(command)}")
+        result = subprocess.run(
+            command, 
+            capture_output=True, 
+            text=True, 
+            check=True, 
+            timeout=TEST_TIMEOUT
+        )
+        process_output = result.stdout + "\n" + result.stderr
+        print(f"Training completed. Output excerpt: {process_output[:200]}...")
+    except subprocess.CalledProcessError as e:
+        process_output = f"{e.stdout or ''}\n{e.stderr or ''}"
+        pytest.fail(f"Training script failed with error: {e}\nOutput: {process_output}")
+    except subprocess.TimeoutExpired as e:
+        process_output = f"{e.stdout.decode() if e.stdout else ''}\n{e.stderr.decode() if e.stderr else ''}"
+        pytest.fail(f"Training script timed out after {TEST_TIMEOUT} seconds.\nOutput: {process_output}")
+    
+    # Extract run ID from output
+    run_id = extract_run_id_from_output(process_output)
+    assert run_id, "Failed to extract WANDB_RUN_ID from script output"
+    print(f"Extracted W&B run ID: {run_id}")
+    
+    # Connect to the run directly using its ID
+    try:
+        api = wandb.Api(timeout=60)
+        entity = api.default_entity
+        run_path = f"{entity}/{TEST_PROJECT_NAME}/{run_id}"
+        run = api.run(run_path)
+        
+        # Verify wandb metrics were logged
+        history = fetch_run_data_with_retries(run, keys=["mean reward", "_step"])
+        
+        # Verify expected metrics exist
+        assert any("mean reward" in record for record in history), \
+            f"Metric 'mean reward' not found in Wandb run history for run {run_id}"
+            
+        print(f"Successfully verified 'mean reward' logging for run: {run_id}")
+        
+        # Allow some time for videos to be processed by W&B
+        print("Waiting for W&B to process videos...")
+        time.sleep(15)
+        
+        # Verify video files were uploaded
+        print(f"Checking for video content in run: {run_id}")
+        has_videos = check_for_video_content(run, max_retries=8, delay=10)
+        
+        assert has_videos, f"No video content found in Wandb run {run_id}"
+        print(f"Successfully verified video uploads for run: {run_id}")
+        
+    except Exception as e:
+        pytest.fail(f"Error verifying wandb metrics or videos: {e}")
+
+# Add a similar specific test for Genesis environments
+@pytest.mark.skipif(os.getenv("WANDB_API_KEY") is None, reason="Requires WANDB_API_KEY environment variable")
+def test_genesis_video_logging():
+    """Test that videos are properly logged with Genesis environment."""
+    # Setup test parameters with timestamp for uniqueness
+    timestamp = int(time.time())
+    run_name = f"{TEST_RUN_NAME_BASE}-genesis-{timestamp}"
+    env_id = "GenCartPole-v0"  # Use Genesis environment specifically
+    
+    # Use small wandb_video_steps to ensure videos are captured within our short test
+    video_steps = 5  # Small number to trigger videos frequently
+    command = [
+        "python", TRAIN_SCRIPT_PATH,
+        "--project-name", TEST_PROJECT_NAME,
+        "--run-name", run_name,
+        "--env-id", env_id,
+        "--wandb-video-steps", str(video_steps),
+        "--record-video", "true",  # Explicitly enable video recording
+        "algo:ppo-config",
+        "--algo.n-epi", "10",  # Run for enough episodes to generate videos
+        "--algo.report-interval", "2"  # Ensure frequent reporting
+    ]
+
+    # Run the training script and capture output
+    try:
+        print(f"Running command: {' '.join(command)}")
+        result = subprocess.run(
+            command, 
+            capture_output=True, 
+            text=True, 
+            check=True, 
+            timeout=TEST_TIMEOUT
+        )
+        process_output = result.stdout + "\n" + result.stderr
+        print(f"Training completed. Output excerpt: {process_output[:200]}...")
+    except subprocess.CalledProcessError as e:
+        process_output = f"{e.stdout or ''}\n{e.stderr or ''}"
+        pytest.fail(f"Training script failed with error: {e}\nOutput: {process_output}")
+    except subprocess.TimeoutExpired as e:
+        process_output = f"{e.stdout.decode() if e.stdout else ''}\n{e.stderr.decode() if e.stderr else ''}"
+        pytest.fail(f"Training script timed out after {TEST_TIMEOUT} seconds.\nOutput: {process_output}")
+    
+    # Extract run ID from output
+    run_id = extract_run_id_from_output(process_output)
+    assert run_id, "Failed to extract WANDB_RUN_ID from script output"
+    print(f"Extracted W&B run ID: {run_id}")
+    
+    # Connect to the run directly using its ID
+    try:
+        api = wandb.Api(timeout=60)
+        entity = api.default_entity
+        run_path = f"{entity}/{TEST_PROJECT_NAME}/{run_id}"
+        run = api.run(run_path)
+        
+        # Verify wandb metrics were logged
+        history = fetch_run_data_with_retries(run, keys=["mean reward", "_step"])
+        
+        # Verify expected metrics exist
+        assert any("mean reward" in record for record in history), \
+            f"Metric 'mean reward' not found in Wandb run history for run {run_id}"
+            
+        print(f"Successfully verified 'mean reward' logging for run: {run_id}")
+        
+        # Allow some time for videos to be processed by W&B
+        print("Waiting for W&B to process videos...")
+        time.sleep(15)
+        
+        # Verify video files were uploaded
+        print(f"Checking for video content in run: {run_id}")
+        has_videos = check_for_video_content(run, max_retries=8, delay=10)
+        
+        assert has_videos, f"No video content found in Wandb run {run_id}"
+        print(f"Successfully verified video uploads for run: {run_id}")
+        
+    except Exception as e:
+        pytest.fail(f"Error verifying wandb metrics or videos: {e}")
