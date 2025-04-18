@@ -1,7 +1,7 @@
 from gymnasium.vector import SyncVectorEnv # Import for factory
-from gymnasium.wrappers import NumpyToTorch as GymNumpyToTorch # Import for factory
 from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch # Import for factory
-from genRL.wrappers.vector_record_video import RecordVectorizedVideo # Import the new wrapper
+# from genRL.wrappers.vector_record_video import RecordVectorizedVideo # Remove old import
+from genRL.wrappers.record_video import RecordVideo # Import the single-env wrapper
 import numpy as np
 import torch
 
@@ -51,18 +51,28 @@ def create_mujoco_vector_entry(EnvClass) -> callable:
         worker_seeds = seed_sequence.spawn(num_envs)
 
         # Define the function to create a single worker env
-        def make_env(worker_seed_seq):
+        def make_env(worker_seed_seq, index):
             def _init():
                 worker_kwargs = base_env_kwargs.copy()
                 worker_kwargs['seed'] = worker_seed_seq.entropy # Use integer seed
                 worker_kwargs['render_mode'] = worker_render_mode
-                # print(f"Creating worker env with kwargs: {worker_kwargs}")
-                return EnvClass(**worker_kwargs)
+                worker_kwargs['worker_index'] = index # Pass worker index
+                
+                # Create the base environment instance
+                env = EnvClass(**worker_kwargs)
+                
+                # Apply the RecordVideo wrapper if needed
+                if wandb_video_steps is not None and wandb_video_steps > 0:
+                    # Pass wandb_video_steps to the wrapper
+                    # The wrapper itself will check worker_index
+                    env = RecordVideo(env, wandb_video_steps=wandb_video_steps)
+                    
+                return env
             return _init
 
         # Create the synchronous vector environment
         vec_env = SyncVectorEnv([
-            make_env(worker_seeds[i])
+            make_env(worker_seeds[i], i) # Pass index to make_env
             for i in range(num_envs)
         ])
         # print("SyncVectorEnv created.")
@@ -70,16 +80,6 @@ def create_mujoco_vector_entry(EnvClass) -> callable:
         # Apply the tensor wrapper
         # print(f"Applying VectorNumpyToTorch wrapper (device={device}).")
         final_env = VectorNumpyToTorch(vec_env, device=device)
-
-        # Apply the video recording wrapper if requested
-        if wandb_video_steps is not None and wandb_video_steps > 0:
-            print(f"[Vector Factory] Applying RecordVectorizedVideo wrapper (steps={wandb_video_steps}).")
-            # Determine FPS from base env metadata if possible
-            try:
-                 fps = EnvClass.metadata.get('render_fps', 30)
-            except AttributeError:
-                 fps = 30 # Default FPS
-            final_env = RecordVectorizedVideo(final_env, wandb_video_steps=wandb_video_steps, fps=fps)
         
         return final_env
 

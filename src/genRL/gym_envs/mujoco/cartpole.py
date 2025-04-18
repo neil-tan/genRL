@@ -5,7 +5,7 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 import mujoco
 # import torch # No longer needed directly here
-from genRL.gym_envs.mujoco.base import create_mujoco_single_entry, create_mujoco_vector_entry
+# from genRL.gym_envs.mujoco.base import create_mujoco_single_entry, create_mujoco_vector_entry # Remove factory imports
 
 DEFAULT_CAMERA_CONFIG = {
     "trackbodyid": 0,        # id of the body to track (-1 => world, 0 => cart)
@@ -28,12 +28,14 @@ class MujocoCartPoleEnv(gym.Env):
         render_mode=None,
         xml_file: str = os.path.join(os.path.dirname(__file__), "../../../../assets/urdf/cartpole.urdf"),
         seed=None,
-        camera_config=None,
+        # camera_config=None, # Remove camera_config for now
         max_force = 100.0,
+        worker_index: int | None = None, # Add worker_index
         **kwargs, # Catch unused args
     ):
         print(f"[MujocoCartPoleEnv] Loading model from: {xml_file}")
         self.xml_file = xml_file
+        self.worker_index = worker_index # Store worker index
         try:
             self.model = mujoco.MjModel.from_xml_path(self.xml_file)
         except Exception as e:
@@ -105,7 +107,7 @@ class MujocoCartPoleEnv(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
 
-        self._camera_config = camera_config if camera_config is not None else DEFAULT_CAMERA_CONFIG
+        # self._camera_config = camera_config if camera_config is not None else DEFAULT_CAMERA_CONFIG # Remove camera config storage
 
         self.seed(seed)
 
@@ -177,49 +179,76 @@ class MujocoCartPoleEnv(gym.Env):
 
         return observation, info
 
-    # ... _initialize_renderer and render methods remain the same ...
-    def _initialize_renderer(self):
+    def render(self, mode=None): # Add mode argument
+        # Determine the render mode to use
+        render_mode_to_use = mode if mode is not None else self.render_mode
+        
+        # Initialize renderer if needed based on the mode to use
+        self._initialize_renderer(render_mode_to_use) # Pass mode to initializer
         if self.renderer is None:
-            if self.render_mode == "human":
-                self.renderer = mujoco.Renderer(self.model, height=480, width=640)
-            elif self.render_mode in ["rgb_array", "depth_array"]:
-                self.renderer = mujoco.Renderer(self.model, height=480, width=640)
+            if render_mode_to_use == "ansi": # Still print ANSI if requested
+                 obs = self._get_obs()
+                 print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
+            return None # Return None if renderer couldn't be initialized
 
-    def render(self):
-        self._initialize_renderer()
-        if self.renderer is None:
-            return
+        # --- Simplified Rendering Logic --- 
+        # Update scene state using the default free camera (ID -1)
+        self.renderer.update_scene(self.data, camera=-1) 
 
-        if self.render_mode == "human":
-            self.renderer.update_scene(self.data)
-            self.renderer.scene.camera.trackbodyid = self._camera_config["trackbodyid"]
-            self.renderer.scene.camera.distance = self._camera_config["distance"]
-            self.renderer.scene.camera.lookat[:] = self._camera_config["lookat"]
-            self.renderer.scene.camera.elevation = self._camera_config["elevation"]
-            self.renderer.scene.camera.azimuth = self._camera_config["azimuth"]
+        # Perform rendering based on the mode
+        if render_mode_to_use == "human":
             self.renderer.render()
             return None
-        elif self.render_mode == "rgb_array":
-            self.renderer.update_scene(self.data)
+        elif render_mode_to_use == "rgb_array":
             return self.renderer.render()
-        elif self.render_mode == "depth_array":
-            self.renderer.update_scene(self.data, scene_option=mujoco.MjvOption().flags[mujoco.mjtVisFlag.mjVIS_Depth])
-            return self.renderer.render()
-        elif self.render_mode == "ansi":
+        elif render_mode_to_use == "depth_array":
+            # For depth, enable the depth flag in the scene options
+            original_flags = self.renderer.scene.flags.copy()
+            self.renderer.scene.flags[mujoco.mjtVisFlag.mjVIS_Depth] = True
+            # Update scene again to ensure depth is captured correctly
+            self.renderer.update_scene(self.data, camera=-1) # Use camera=-1 here too
+            depth_pixels = self.renderer.render()
+            # Restore original flags
+            self.renderer.scene.flags[:] = original_flags
+            # Update scene one last time to reset visual state if needed
+            self.renderer.update_scene(self.data, camera=-1) # And here
+            return depth_pixels
+        elif render_mode_to_use == "ansi":
             obs = self._get_obs()
             print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
             return None
+        else:
+             return None
+        # --- End Simplified Rendering Logic ---
+
+    # Modify initializer to accept mode
+    def _initialize_renderer(self, render_mode_to_use):
+        if self.renderer is None:
+            if render_mode_to_use == "human":
+                try:
+                    self.renderer = mujoco.Renderer(self.model, height=480, width=640)
+                except Exception as e:
+                    print(f"[MujocoCartPoleEnv] Warning: Failed to initialize human renderer: {e}")
+                    self.renderer = None # Ensure renderer is None if init fails
+            elif render_mode_to_use in ["rgb_array", "depth_array"]:
+                # EGL should work for offscreen rendering
+                try:
+                    self.renderer = mujoco.Renderer(self.model, height=480, width=640)
+                except Exception as e:
+                    print(f"[MujocoCartPoleEnv] Warning: Failed to initialize offscreen ({render_mode_to_use}) renderer: {e}")
+                    self.renderer = None
+            # No renderer needed for ANSI
 
     def close(self):
         if self.renderer:
             self.renderer.close()
             self.renderer = None
 
-# Register the environment using the factory functions from base.py
+# Register the environment directly using the class
 gym.register(
     id='MujocoCartPole-v0',
-    entry_point=create_mujoco_single_entry(MujocoCartPoleEnv), # Pass the class itself
-    vector_entry_point=create_mujoco_vector_entry(MujocoCartPoleEnv), # Pass the class itself
+    entry_point=MujocoCartPoleEnv, # Use the class directly
+    # vector_entry_point=create_mujoco_vector_entry(MujocoCartPoleEnv), # Remove vector_entry_point
     max_episode_steps=1000, 
     reward_threshold=950.0, 
 )

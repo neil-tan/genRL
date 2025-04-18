@@ -6,11 +6,10 @@ import gymnasium as gym
 from gymnasium import spaces
 import torch
 import wandb
-import tempfile
-from genRL.utils import downsample_list_image_to_video_array, auto_pytorch_device, debug_print
+from genRL.utils import auto_pytorch_device, debug_print
 # %%
 class GenCartPoleEnv(gym.Env):
-    metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
+    metadata = {"render_modes": ["human", "ansi", "rgb_array"], "render_fps": 60}
 
     def __init__(self,
                  render_mode=None,
@@ -19,7 +18,6 @@ class GenCartPoleEnv(gym.Env):
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
-                 wandb_video_steps = None,
                  logging_level="info",
                  gs_backend = gs.cpu,
                  seed=None,
@@ -49,11 +47,7 @@ class GenCartPoleEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        
-        self.wandb_video_steps = wandb_video_steps
-        self._last_video_log_step = 0
-        self._temp_video_dir = None if self.wandb_video_steps is None else tempfile.TemporaryDirectory()
-        print(f"Temp video dir: {self._temp_video_dir}")
+        self.worker_index = 0 # Assume Genesis is always worker 0 internally
         
         ### simulator setup
         if gs._initialized:
@@ -156,8 +150,6 @@ class GenCartPoleEnv(gym.Env):
 
     @torch.no_grad()
     def reset(self, seed=None, options=None):
-        self._stop_recording()
-
         super().reset(seed=seed)
         self._seed = seed
         self._options = options
@@ -182,27 +174,8 @@ class GenCartPoleEnv(gym.Env):
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)
 
-        self._start_recording()
-
         return self.observation(), self._get_info()
     
-    def _start_recording(self):
-        if self.wandb_video_steps is None:
-            return
-        
-        assert self.wandb_video_steps > 0
-
-        try:
-            wandb_step = wandb.run.step
-        except AttributeError:
-            wandb_step = 0
-
-        if ((wandb_step - self._last_video_log_step) > self.wandb_video_steps or \
-                self._last_video_log_step == 0) and \
-                     not self.cam._in_recording:
-            self.cam.start_recording()
-            self._last_video_log_step = wandb_step
-
     @torch.no_grad()
     # action shape: (num_envs, action_dim)
     def step(self, action):
@@ -241,33 +214,56 @@ class GenCartPoleEnv(gym.Env):
         # info: empty dict
         return self.observation(), reward, self.done, False, self._get_info()
 
-    # def getPoleHeight(self):
-    #     pole_height = self.cartpole.get_link("pole").get_AABB()[1,2] \
-    #                     - self.cartpole.get_joint('cart_to_pole').get_pos()[2]
-
-    #     return pole_height
-    
-    # def getCartPosition(self):
-    #     return self.cartpole.get_link("cart").get_pos()[0]
-    
-    def render(self):
-        if self.render_mode == "human":
+    def render(self, mode=None):
+        # Use the provided mode or the instance's default render_mode
+        render_mode_to_use = mode if mode is not None else self.render_mode
+        
+        if render_mode_to_use == "human":
             # retina display workaround
             if sys.platform == "darwin" and self.scene._visualizer._viewer is not None:
                 self.scene._visualizer._viewer._pyrender_viewer._renderer.dpscale = 1
             # This is a blocking call
             # on Mac, it has to run in the main threads
             self.scene.viewer.start()
-        elif self.render_mode == "ansi":
+            return None # Human mode typically doesn't return
+        elif render_mode_to_use == "ansi":
             obs = self._get_observation_tuple()
             print(f"Cart Position: {obs[0]}; Pole Angle: {obs[2]}")
+            return None # ANSI mode typically doesn't return
+        elif render_mode_to_use == "rgb_array":
+            # Use Genesis camera API to get the frame
+            if self.cam:
+                frame = self.cam.render()
+                # Genesis might return tensor, convert to numpy
+                if isinstance(frame, torch.Tensor):
+                    # Ensure correct shape (H, W, C) and type (uint8)
+                    frame_np = frame.cpu().numpy()
+                    if frame_np.ndim == 4: # Might be (N, H, W, C) for multi-env
+                        frame_np = frame_np[0] # Take frame from env 0
+                    if frame_np.dtype != np.uint8:
+                         frame_np = (frame_np * 255).clip(0, 255).astype(np.uint8)
+                    return frame_np
+                elif isinstance(frame, np.ndarray):
+                    # Ensure correct shape and type
+                    if frame.ndim == 4:
+                        frame = frame[0]
+                    if frame.dtype != np.uint8:
+                         frame = (frame * 255).clip(0, 255).astype(np.uint8)
+                    return frame
+                else:
+                    print("[GenCartPoleEnv] Warning: cam.render() returned unexpected type.")
+                    return None # Or handle error appropriately
+            else:
+                print("[GenCartPoleEnv] Warning: Camera not available for rgb_array rendering.")
+                return None
+        else:
+             if self.render_mode in self.metadata["render_modes"]:
+                 return self.render(mode=self.render_mode)
+             else:
+                 return None
     
     def close(self):
         try:
-            # self._stop_viewer()
-            self._stop_recording()
-            if self._temp_video_dir is not None:
-                self._temp_video_dir.cleanup()
             gs.destroy()
         except AttributeError as e:
             print(f"Failed to close Environment: {e}")
@@ -278,40 +274,6 @@ class GenCartPoleEnv(gym.Env):
     def __del__(self):
         if gs._initialized:
             self.close()
-    
-    def _stop_recording(self):
-        if not self.cam._in_recording or len(self.cam._recorded_imgs) == 0:
-            return
-
-        # Only proceed if we have a temporary directory set up
-        if self._temp_video_dir is None:
-            self.cam.stop_recording()
-            return
-            
-        # Create a unique filename in the temporary directory
-        video_filename = f"cartpole_video_{self.current_steps_count}.mp4"
-        video_path = f"{self._temp_video_dir.name}/{video_filename}"
-        
-        # Upload to wandb if it's available and initialized
-        factor = 10
-        images = downsample_list_image_to_video_array(self.cam._recorded_imgs, factor=factor)
-        # self.cam.stop_recording(save_to_filename=video_path, fps=self.metadata["render_fps"])
-        
-        # Upload to wandb if it's available and initialized
-        try:
-            if wandb.run is not None:
-                wandb.log({"cartpole_video": wandb.Video(images, fps=self.metadata["render_fps"]/factor)})
-                # wandb.log({"cartpole_video": wandb.Video(video_path, format="mp4")})
-        except Exception as e:
-            print(f"Failed to upload video to wandb: {e}")
-        
-        self.cam.stop_recording(save_to_filename=video_path)
-    
-    # def _stop_viewer(self):
-    #     # self.scene._visualizer._viewer
-    #     if self.scene.viewer and self.scene.viewer.is_alive():
-    #         self.scene.viewer.stop()
-
 
 custom_environment_spec = gym.register(id='GenCartPole-v0', 
                                         entry_point=GenCartPoleEnv,
