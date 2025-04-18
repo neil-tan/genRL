@@ -5,6 +5,7 @@ import imageio
 import wandb
 import time
 from gymnasium.core import Wrapper
+import tempfile # Re-import tempfile
 import multiprocessing as mp 
 from functools import partial 
 
@@ -13,11 +14,10 @@ class RecordSingleEnvVideo(Wrapper):
 
     Uses multiprocessing synchronization primitives (Lock, Value) passed during
     initialization to designate a single instance across processes as the recorder.
-    Expects the video folder path to be provided.
+    The designated recorder manages its own temporary directory for video storage.
 
     Args:
         env (gym.Env): The base environment instance to wrap.
-        video_folder (str): The folder to save the video frames to.
         recorder_lock (mp.Lock): A multiprocessing lock.
         recorder_flag (mp.Value): A multiprocessing Value('i', 0).
         name_prefix (str): Prefix for the video file name.
@@ -28,7 +28,7 @@ class RecordSingleEnvVideo(Wrapper):
     def __init__(
         self,
         env: gym.Env,
-        video_folder: str, 
+        # video_folder: str, # Removed again
         recorder_lock: mp.Lock,
         recorder_flag: mp.Value,
         name_prefix: str = "rl-video",
@@ -39,6 +39,7 @@ class RecordSingleEnvVideo(Wrapper):
         super().__init__(env)
         
         self.is_recording_worker = False
+        self._temp_dir = None # Initialize temp dir handle
         self.video_folder = None 
         self.recording = False
         self.video_writer = None
@@ -55,14 +56,20 @@ class RecordSingleEnvVideo(Wrapper):
         # --- End Recorder Designation Logic ---
 
         if self.is_recording_worker:
-            if video_folder is None:
-                 print("[RecordSingleEnvVideo recorder] Error: video_folder cannot be None for the recording worker.")
-                 self.is_recording_worker = False 
-            else:
-                self.video_folder = os.path.abspath(video_folder)
-                print(f"[RecordSingleEnvVideo recorder] Using video folder: {self.video_folder}")
+            # Create and manage temporary directory internally *only if* designated recorder
+            try:
+                self._temp_dir = tempfile.TemporaryDirectory()
+                self.video_folder = self._temp_dir.name
+                print(f"[RecordSingleEnvVideo recorder] Created temp video folder: {self.video_folder}")
+            except Exception as e:
+                 print(f"[RecordSingleEnvVideo recorder] Failed to create temp directory: {e}")
+                 self.is_recording_worker = False # Disable recording if dir fails
+                 # Attempt to reset the flag if this instance failed? Risky, maybe log error instead.
+                 # with recorder_lock: # This could deadlock if another process holds lock
+                 #     if recorder_flag.value == 1: # Check if *we* were the one who set it
+                 #         recorder_flag.value = 0 # Allow another process to try
 
-            if self.is_recording_worker: 
+            if self.is_recording_worker: # Check again in case temp dir failed
                 if step_trigger is None:
                     self.step_trigger = lambda step: step == 0 
                 else:
@@ -138,9 +145,10 @@ class RecordSingleEnvVideo(Wrapper):
         if not self.is_recording_worker or self.recording or self.video_folder is None:
             return
         
-        if not os.path.isdir(self.video_folder):
-            print(f"[RecordSingleEnvVideo recorder] Error: Video folder {self.video_folder} does not exist. Cannot start recording.")
-            return
+        # Directory should exist if self.video_folder is set
+        # if not os.path.isdir(self.video_folder):
+        #     print(f"[RecordSingleEnvVideo recorder] Error: Video folder {self.video_folder} does not exist. Cannot start recording.")
+        #     return
             
         self.close_video_recorder() 
 
@@ -185,9 +193,29 @@ class RecordSingleEnvVideo(Wrapper):
         self.recorded_frames = 0
 
     def close(self):
-        """Close the wrapper and the base environment. Video dir cleanup is external."""
+        """Close the wrapper, the base environment, and clean up the temp directory if owner."""
         if self.is_recording_worker:
-            self.close_video_recorder()
+            self.close_video_recorder() # Ensure video file is closed and logged
+            
+            # Explicitly delete the video file before cleaning the directory
+            if self.latest_video_path and os.path.exists(self.latest_video_path):
+                try:
+                    # print(f"[RecordSingleEnvVideo recorder] Deleting video file: {self.latest_video_path}")
+                    os.remove(self.latest_video_path)
+                except Exception as e:
+                    print(f"[RecordSingleEnvVideo recorder] Warning: Failed to delete video file {self.latest_video_path}: {e}")
+            self.latest_video_path = None # Clear the path after deletion attempt
+
+            # Clean up the temporary directory *only if* this instance created it
+            if self._temp_dir:
+                try:
+                    print(f"[RecordSingleEnvVideo recorder] Cleaning up temp video directory: {self.video_folder}")
+                    self._temp_dir.cleanup()
+                except Exception as e:
+                    # This might still fail if other unexpected files are present
+                    print(f"[RecordSingleEnvVideo recorder] Error cleaning up temp video dir {self.video_folder}: {e}")
+                self._temp_dir = None
+                self.video_folder = None
                 
-        super().close() 
+        super().close() # Call the close method of the wrapped env
 

@@ -21,20 +21,6 @@ from genRL.wrappers.vector_numpy_to_torch import VectorNumpyToTorch # Import ten
 from genRL.wrappers.record_single_env_video import RecordSingleEnvVideo # Import new wrapper
 from functools import partial # Import partial for wrapper factory
 import multiprocessing as mp # Import multiprocessing
-import tempfile # Re-import tempfile
-
-# --- Remove multiprocessing start method setting ---
-# if __name__ == '__main__':
-#     try:
-#         mp.set_start_method('spawn', force=True)
-#         print("[train.py] Set multiprocessing start method to 'spawn'.")
-#     except RuntimeError as e:
-#         print(f"[train.py] Warning: Could not set start method 'spawn': {e}")
-
-# python examples/train.py --env-id MujocoCartPole-v0 algo:ppo-config --algo.n-epi 10
-# python examples/train.py --env-id GenCartPole-v0 algo:ppo-config --algo.n-epi 10
-# python examples/train.py --env-id MujocoCartPole-v0 algo:grpo-config --algo.n-epi 10
-# python examples/train.py --env-id GenCartPole-v0 algo:grpo-config --algo.n-epi 10 --wandb offline
 
 def main():
     args = tyro.cli(
@@ -77,20 +63,7 @@ def main():
     recorder_lock = mp.Lock() if "Mujoco" in args.env_id else None
     recorder_flag = mp.Value('i', 0) if "Mujoco" in args.env_id else None
 
-    # --- Create temporary directory for video frames (only needed for MuJoCo) ---
-    temp_video_dir = None
-    video_folder_path = None
-    if record_video and "Mujoco" in args.env_id:
-        try:
-            temp_video_dir = tempfile.TemporaryDirectory()
-            video_folder_path = temp_video_dir.name
-            print(f"[train.py] Created temporary video folder for MuJoCo: {video_folder_path}")
-        except Exception as e:
-            print(f"[train.py] Warning: Failed to create temp video directory: {e}. Disabling MuJoCo video recording.")
-            record_video = False 
-            temp_video_dir = None 
-            video_folder_path = None
-    # --- End Temp Dir Creation ---
+    # --- Remove temporary directory creation --- 
 
     # Try to get fps from metadata
     try:
@@ -99,74 +72,56 @@ def main():
     except Exception:
         fps = 30 # Default FPS
 
-    # --- Conditional Environment Creation --- 
-    envs = None
+    # --- Define kwargs for gym.make_vec --- 
+    # These will be passed to the vector_entry_point (for MuJoCo) 
+    # or potentially the base env __init__ (for Genesis)
+    make_vec_kwargs = {
+        "env_id": args.env_id,         # Pass env_id explicitly
+        "num_envs": config.num_envs,
+        "seed": args.random_seed, 
+        "render_mode": base_render_mode, # Used by MuJoCo vector entry point
+        "logging_level": "warning",      # Used by Genesis __init__
+        "gs_backend": gs_backend,      # Used by Genesis __init__
+        "return_tensor": True,         # Used by Genesis __init__
+        "wandb_video_steps": video_steps, # Used by Genesis __init__
+        # Args for MuJoCo video recording (passed to its vector_entry_point)
+        "record_video": record_video, 
+        "recorder_lock": recorder_lock,
+        "recorder_flag": recorder_flag,
+        "name_prefix": f"{args.env_id.replace('-v0','')}-video",
+        "video_length": video_steps if video_steps else 1000,
+        "fps": fps,
+    }
+    # Add env-specific kwargs from args
+    if hasattr(args, 'max_force'): make_vec_kwargs['max_force'] = args.max_force
+    if hasattr(args, 'targetVelocity'): make_vec_kwargs['targetVelocity'] = args.targetVelocity
+
+    print(f"Creating environment {args.env_id} with gym.make_vec (using vector_entry_point if available).")
     try:
-        if args.env_id.startswith("Gen"):
-            print(f"Creating Genesis environment {args.env_id} with gym.make.")
-            # Create Genesis env directly, passing num_envs and video steps
-            envs = gym.make(
-                args.env_id,
-                num_envs=config.num_envs,
-                render_mode="ansi", # Or other modes if needed, Genesis handles rendering
-                return_tensor=True, # Genesis should return tensors
-                wandb_video_steps=video_steps, # Pass video config directly
-                logging_level="warning",
-                gs_backend=gs_backend,
-                seed=args.random_seed
-            )
-            # No need for VectorNumpyToTorch for Genesis
-            print(f"Genesis environment {args.env_id} created successfully.")
+        # Use gym.make_vec universally. It will use the registered vector_entry_point if found.
+        # For Genesis, it should ideally fall back to calling gym.make with num_envs.
+        # We don't specify vectorization_mode, letting make_vec choose based on entry point.
+        vec_env = gym.make_vec(
+            args.env_id, 
+            # num_envs is now in kwargs
+            # wrappers=None, # Wrappers are handled by vector_entry_point or not needed
+            **make_vec_kwargs
+        )
+        print(f"Environment {args.env_id} created successfully.")
 
-        elif "Mujoco" in args.env_id:
-            print(f"Creating MuJoCo environment {args.env_id} with gym.make_vec.")
-            # Keyword arguments for the base MuJoCo environment's __init__
-            env_kwargs = {
-                "seed": args.random_seed, 
-                "render_mode": base_render_mode,
-            }
-            if hasattr(args, 'max_force'): env_kwargs['max_force'] = args.max_force
-            
-            # Define wrappers list for MuJoCo base envs
-            wrappers = []
-            if record_video and video_folder_path is not None:
-                wrappers.append(partial(
-                    RecordSingleEnvVideo,
-                    video_folder=video_folder_path, 
-                    recorder_lock=recorder_lock,
-                    recorder_flag=recorder_flag,
-                    name_prefix=f"{args.env_id.replace('-v0','')}-video",
-                    video_length=video_steps, 
-                    fps=fps
-                ))
-            
-            print(f"Applying base wrappers via gym.make_vec: {wrappers}")
-            vec_env = gym.make_vec(
-                args.env_id, 
-                num_envs=config.num_envs, 
-                vectorization_mode="async", 
-                wrappers=wrappers if wrappers else None, 
-                **env_kwargs
-            )
-            print(f"Base vectorized MuJoCo environment created successfully.")
-
-            # Apply VectorNumpyToTorch wrapper AFTER vectorization for MuJoCo
+        # --- Apply Post-Vectorization Wrappers --- 
+        # Apply Tensor Wrapper conditionally AFTER vectorization (if needed)
+        if "Mujoco" in args.env_id:
             print("Applying VectorNumpyToTorch wrapper.")
             envs = VectorNumpyToTorch(vec_env, device=device)
-            print(f"MuJoCo environment {args.env_id} wrapped successfully.")
-
         else:
-            raise ValueError(f"Unsupported environment ID prefix: {args.env_id}")
+            envs = vec_env # Genesis env already returns tensors
+            
+        print(f"Environment {args.env_id} final setup complete.")
 
     except Exception as e:
         print(f"Error creating/wrapping environment {args.env_id}: {e}")
         # Clean up temp dir if creation failed mid-way
-        if temp_video_dir:
-            try:
-                temp_video_dir.cleanup()
-                print(f"[train.py] Cleaned up temp video directory after error: {video_folder_path}")
-            except Exception as cleanup_e:
-                print(f"[train.py] Error cleaning up temp video dir after error: {cleanup_e}")
         raise e
 
     # --- End Environment Creation Logic ---
@@ -185,12 +140,6 @@ def main():
     # envs.render() # Vector env rendering is handled differently or via wrappers
     envs.close()
     # --- Clean up temporary directory (only if created) --- 
-    if temp_video_dir:
-         try:
-             temp_video_dir.cleanup()
-             print(f"[train.py] Cleaned up temp video directory: {video_folder_path}")
-         except Exception as e:
-             print(f"[train.py] Error cleaning up temp video dir: {e}")
 
 if __name__ == '__main__':
     main()

@@ -4,8 +4,8 @@ import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.utils import seeding
 import mujoco
-# import torch # No longer needed directly here
-# from genRL.gym_envs.mujoco.base import create_mujoco_single_entry, create_mujoco_vector_entry # Remove factory imports
+from functools import partial # Import partial
+from genRL.wrappers.record_single_env_video import RecordSingleEnvVideo # Import video wrapper
 
 DEFAULT_CAMERA_CONFIG = {
     "trackbodyid": 0,        # id of the body to track (-1 => world, 0 => cart)
@@ -244,11 +244,105 @@ class MujocoCartPoleEnv(gym.Env):
             self.renderer.close()
             self.renderer = None
 
-# Register the environment directly using the class
+# --- Vector Env Factory for MuJoCo ---
+def make_mujoco_env(env_id: str, worker_index: int, seed: int | None, 
+                    render_mode: str | None, record_video: bool, 
+                    video_kwargs: dict | None, **env_specific_kwargs):
+    """Helper function to create a single MuJoCo env instance and apply wrappers."""
+    # Create base env
+    env = MujocoCartPoleEnv(
+        render_mode=render_mode, 
+        worker_index=worker_index, 
+        seed=seed + worker_index if seed is not None else None, 
+        **env_specific_kwargs
+    )
+    
+    # Apply video wrapper if requested
+    if record_video and video_kwargs is not None:
+        # Ensure necessary keys are in video_kwargs
+        # Remove video_folder check
+        if 'recorder_lock' not in video_kwargs or 'recorder_flag' not in video_kwargs:
+             print("[make_mujoco_env] Warning: Missing required lock/flag keys in video_kwargs for RecordSingleEnvVideo. Skipping wrapper.")
+        else:
+            env = RecordSingleEnvVideo(
+                env,
+                # video_folder=video_kwargs['video_folder'], # Removed
+                recorder_lock=video_kwargs['recorder_lock'],
+                recorder_flag=video_kwargs['recorder_flag'],
+                name_prefix=video_kwargs.get("name_prefix", f"{env_id.replace('-v0','')}-video"),
+                video_length=video_kwargs.get("video_length", 1000),
+                fps=video_kwargs.get("fps", 30)
+            )
+    return env
+
+def create_mujoco_vector_env(num_envs: int, **kwargs):
+    """Vector entry point for MuJoCo environments.
+    
+    Signature matches expectation from gym.make_vec when using vector_entry_point.
+    """
+    # Retrieve env_id from kwargs (passed explicitly from train.py now)
+    env_id = kwargs.get("env_id", None) 
+    if env_id is None:
+        raise ValueError("Environment ID ('env_id') not found in kwargs passed to vector_entry_point.")
+        
+    print(f"[create_mujoco_vector_env] Creating AsyncVectorEnv for {env_id} with {num_envs} envs.")
+    
+    # ... rest of the function ...
+    # Extract arguments relevant for make_mujoco_env
+    seed = kwargs.get("seed", None)
+    render_mode = kwargs.get("render_mode", None)
+    record_video = kwargs.get("record_video", False)
+    
+    # Package video wrapper specific args
+    video_kwargs = None
+    if record_video:
+        video_kwargs = {
+            # "video_folder": kwargs.get("video_folder_path"), # Removed
+            "recorder_lock": kwargs.get("recorder_lock"),
+            "recorder_flag": kwargs.get("recorder_flag"),
+            "name_prefix": kwargs.get("name_prefix", f"{env_id.replace('-v0','')}-video"),
+            "video_length": kwargs.get("video_length", 1000),
+            "fps": kwargs.get("fps", 30)
+        }
+        # Basic validation (remove video_folder check)
+        if not all(video_kwargs.get(k) is not None for k in ['recorder_lock', 'recorder_flag']):
+             print("[create_mujoco_vector_env] Warning: Missing required lock/flag args for video recording. Disabling.")
+             record_video = False
+             video_kwargs = None
+
+    # Extract env-specific kwargs (filter out args used by the factory/vector env)
+    # Update factory_args filter
+    factory_args = {"env_id", "num_envs", "seed", "render_mode", "record_video", 
+                    # "video_folder_path", # Removed
+                    "recorder_lock", "recorder_flag", 
+                    "name_prefix", "video_length", "fps"}
+    env_specific_kwargs = {k: v for k, v in kwargs.items() if k not in factory_args}
+
+    # Create the list of env functions
+    env_fns = [
+        partial(
+            make_mujoco_env, 
+            env_id=env_id, 
+            worker_index=i, 
+            seed=seed, 
+            render_mode=render_mode, 
+            record_video=record_video, 
+            video_kwargs=video_kwargs, 
+            **env_specific_kwargs
+        )
+        for i in range(num_envs)
+    ]
+    
+    # Create and return the AsyncVectorEnv
+    return gym.vector.AsyncVectorEnv(env_fns)
+
+# --- End Vector Env Factory ---
+
+# Register the environment with the vector entry point
 gym.register(
     id='MujocoCartPole-v0',
-    entry_point=MujocoCartPoleEnv, # Use the class directly
-    # vector_entry_point=create_mujoco_vector_entry(MujocoCartPoleEnv), # Remove vector_entry_point
+    entry_point=MujocoCartPoleEnv, 
+    vector_entry_point=create_mujoco_vector_env, # Use the factory function
     max_episode_steps=1000, 
     reward_threshold=950.0, 
 )
