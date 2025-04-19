@@ -103,11 +103,11 @@ pip install -e .
 ### Run Example
 A simple Cartpole PPO example:
 ```bash
-python examples/train.py algo:ppo-config --algo.n_epi 185 --wandb disabled
+python examples/train.py --env-id GenCartPole-v0 algo:ppo-config --algo.n-epi 180
 ```
-Running GRPO with Wandb logging:
+Running GRPO with Wandb video logging:
 ```bash
-python examples/train.py algo:grpo-config --algo.n_epi 60
+python examples/train.py --env-id GenCartPole-v0 --wandb_video_episodes 15 algo:grpo-config --algo.n-epi 60
 ```
 
 Hyperparameter sweeping example:

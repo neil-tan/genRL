@@ -16,13 +16,6 @@ from genRL.configs import SessionConfig
 import gymnasium as gym
 import genesis as gs
 from genRL.utils import is_cuda_available
-from genRL.wrappers.vector_numpy_to_torch import AutoTorchWrapper # Import tensor wrapper
-# Import the renamed video wrapper
-from genRL.wrappers.record_video import RecordVideoWrapper 
-from functools import partial # Import partial for wrapper factory
-# Remove multiprocessing import - primitives handled by factory/wrapper
-# import multiprocessing as mp
-
 
 # python examples/train.py --env-id MujocoCartPole-v0 --wandb_video_episodes 30 algo:ppo-config --algo.n-epi 180
 # python examples/train.py --env-id MujocoCartPole-v0 --wandb_video_episodes 10 algo:grpo-config --algo.n-epi 60
@@ -106,7 +99,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# TODO:
-#     - Review video trigger logic in RecordSingleEnvVideo if needed.
-#     - Add more tests for mujoco training
