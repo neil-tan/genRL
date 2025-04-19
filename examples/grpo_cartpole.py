@@ -20,7 +20,7 @@ def main():
                 default=SessionConfig(
                     project_name="genRL_cartpole_grpo",
                     run_name="cartpole",
-                    wandb_video_steps=2000,
+                    wandb_video_episodes=2000,
                     algo=GRPOConfig(num_envs=32, n_epi=180),
                 ),
                 description="Minimal RL GRPO Cartpole example",
@@ -43,7 +43,7 @@ def main():
                    targetVelocity=10,
                    num_envs=config.num_envs,
                    return_tensor=True,
-                   wandb_video_steps=config.wandb_video_steps,
+                   wandb_video_episodes=config.wandb_video_episodes,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu,
                    seed=config.random_seed,

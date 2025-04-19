@@ -21,7 +21,7 @@ class PPOConfig:
     num_envs: int = 8
     reward_scale: float = 0.015
     n_epi: int = 1000
-    wandb_video_steps: int = 2000
+    wandb_video_episodes: int = 2000
     report_interval: int = 10
 
 
@@ -38,7 +38,7 @@ class GRPOConfig:
     num_envs: int = 64
     reward_scale: float = 0.003
     n_epi: int = 1000
-    wandb_video_steps: int = 2000
+    wandb_video_episodes: int = 2000
     report_interval: int = 10
 
 @dataclass
@@ -54,10 +54,12 @@ class OptunaConfig:
 class SessionConfig:
     project_name: str
     run_name: str
-    wandb_video_steps: int
+    # Rename wandb_video_episodes to wandb_video_episodes
+    wandb_video_episodes: int = 20
     wandb: Literal["online", "offline", "disabled"] = "online"
     random_seed: int = 42
     fast_dev_run: bool = False
+    env_id: str = "GenCartPole-v0"
     algo: PPOConfig | GRPOConfig = field(default_factory=PPOConfig)
     tune: OptunaConfig = field(default_factory=OptunaConfig)
     

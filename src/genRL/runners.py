@@ -2,12 +2,9 @@ import genRL.gym_envs.genesis.cartpole
 import genRL.gym_envs.test_envs.cartpole_dummy
 import gymnasium as gym
 import torch
-import torch.nn.functional as F
-from torch.distributions import Categorical
 from genRL.configs import PPOConfig, GRPOConfig
 import genesis as gs
 import sys
-import numpy as np
 import wandb
 from tqdm import trange
 import optuna
@@ -15,6 +12,7 @@ from dataclasses import replace, asdict
 from genRL.rl.agents import ppo_agent, grpo_agent
 from typing import Union
 from genRL.rl.buffers import SimpleBuffer
+from genRL.utils import is_cuda_available
 
 def config_ppo_search_space(trial, config:PPOConfig):
     search_space = {
@@ -66,7 +64,8 @@ def config_search_space(trial, config:Union[PPOConfig, GRPOConfig]):
         raise ValueError(f"Unexpected algo type: {config}")
 
 def training_loop(env, agent, config, run=None, epi_callback=None, compile=False):
-    device = env.unwrapped.device
+    # Determine device based on availability, similar to train.py setup
+    device = "cuda" if is_cuda_available() else "cpu"
     model = agent.to(device)
     buffer = SimpleBuffer(config.T_horizon)
 
@@ -99,10 +98,9 @@ def training_loop(env, agent, config, run=None, epi_callback=None, compile=False
                 s = s_prime
 
                 score += r
-                
-                done = done.all() if isinstance(done, torch.Tensor) else done
-                if done:
-                    run.log({"t_end/T_horizon": t/config.T_horizon})
+
+                if done.all():
+                    # run.log({"t_end/T_horizon": t/config.T_horizon}) # wandb disabled for now
                     break
 
         model.train_net(buffer)
@@ -128,7 +126,7 @@ def objective(trial,
     config = config_search_space(trial, config=session_config.algo)
     
     if session_config.fast_dev_run:
-        config = replace(config, n_epi=8, T_horizon=200, wandb_video_steps=20, num_envs=2)
+        config = replace(config, n_epi=8, T_horizon=200, wandb_video_episodes=20, num_envs=2)
 
     def epi_callback(n_epi, average_score):
         trial.report(average_score, n_epi)
@@ -152,7 +150,7 @@ def objective(trial,
                    targetVelocity=10,
                    num_envs=config.num_envs,
                    return_tensor=True,
-                   wandb_video_steps=config.wandb_video_steps,
+                   wandb_video_episodes=config.wandb_video_episodes,
                    logging_level="warning", # "info", "warning", "error", "debug"
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
                    seed=session_config.random_seed,

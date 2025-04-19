@@ -22,7 +22,7 @@ def run_training(config):
                    targetVelocity=10,
                    num_envs=config.num_envs,
                    return_tensor=True,
-                   wandb_video_steps=config.wandb_video_steps,
+                   wandb_video_episodes=config.wandb_video_episodes,
                    logging_level="warning",
                    gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
                    seed=42)

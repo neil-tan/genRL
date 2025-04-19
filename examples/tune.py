@@ -21,7 +21,7 @@ def main():
                 default=SessionConfig(
                     project_name="genRL_cartpole_tune_test",
                     run_name="cartpole",
-                    wandb_video_steps=2000,
+                    wandb_video_episodes=2000,
                     algo=PPOConfig(n_epi=1000),
                     tune=OptunaConfig(prune_patience=5, n_trials=100),
                 ),

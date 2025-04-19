@@ -5,12 +5,12 @@ import sys
 import gymnasium as gym
 from gymnasium import spaces
 import torch
-import wandb
-import tempfile
 from genRL.utils import downsample_list_image_to_video_array, auto_pytorch_device, debug_print
+from genRL.wrappers.record_video import RecordVideoWrapper
+import multiprocessing as mp
 # %%
 class GenCartPoleEnv(gym.Env):
-    metadata = {"render_modes": ["human", "ansi"], "render_fps": 60}
+    metadata = {"render_modes": ["human", "ansi", "rgb_array"], "render_fps": 60}
 
     def __init__(self,
                  render_mode=None,
@@ -19,7 +19,6 @@ class GenCartPoleEnv(gym.Env):
                  targetVelocity=0.1,
                  max_force=100,
                  step_scaler:int=1,
-                 wandb_video_steps = None,
                  logging_level="info",
                  gs_backend = gs.cpu,
                  seed=None,
@@ -49,18 +48,21 @@ class GenCartPoleEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        
-        self.wandb_video_steps = wandb_video_steps
-        self._last_video_log_step = 0
-        self._temp_video_dir = None if self.wandb_video_steps is None else tempfile.TemporaryDirectory()
-        print(f"Temp video dir: {self._temp_video_dir}")
+        self._last_rendered_frame = None
         
         ### simulator setup
-        if gs._initialized:
-            gs.destroy() # work around for genesis fail to destroy
-        gs.init(backend=gs_backend,
-                seed=seed,
-                logging_level=logging_level)
+        # Initialize Genesis only if not already initialized
+        if not gs._initialized:
+            gs.init(backend=gs_backend,
+                    seed=seed,
+                    logging_level=logging_level)
+        else:
+            # If already initialized, maybe just log a warning or ensure backend matches?
+            # For now, assume the existing instance is fine.
+            print("[GenCartPoleEnv] Warning: Genesis already initialized. Reusing existing instance.")
+            # Optionally check if backend matches:
+            # if gs.cfg.arch != gs_backend:
+            #     raise RuntimeError(f"Genesis initialized with {gs.cfg.arch}, but requested {gs_backend}")
 
         self.scene = gs.Scene(
             show_viewer = self.render_mode == "human",
@@ -148,17 +150,10 @@ class GenCartPoleEnv(gym.Env):
 
         return torch.logical_or(position_failed, angle_failed).to(self.device)
 
-    def _step_simulation(self):
-        self.scene.step()
-        self.cam.render()
-        self.current_steps_count += 1
-        # self.scene.viewer.stop()
-
     @torch.no_grad()
     def reset(self, seed=None, options=None):
-        self._stop_recording()
-
         super().reset(seed=seed)
+        
         self._seed = seed
         self._options = options
         self.current_steps_count = 0
@@ -182,26 +177,7 @@ class GenCartPoleEnv(gym.Env):
         self.cartpole.set_dofs_position(random_positions, dofs_idx)
         self.cartpole.set_dofs_velocity(random_velocities, dofs_idx)
 
-        self._start_recording()
-
         return self.observation(), self._get_info()
-    
-    def _start_recording(self):
-        if self.wandb_video_steps is None:
-            return
-        
-        assert self.wandb_video_steps > 0
-
-        try:
-            wandb_step = wandb.run.step
-        except AttributeError:
-            wandb_step = 0
-
-        if ((wandb_step - self._last_video_log_step) > self.wandb_video_steps or \
-                self._last_video_log_step == 0) and \
-                     not self.cam._in_recording:
-            self.cam.start_recording()
-            self._last_video_log_step = wandb_step
 
     @torch.no_grad()
     # action shape: (num_envs, action_dim)
@@ -219,7 +195,8 @@ class GenCartPoleEnv(gym.Env):
             
         self.cartpole.control_dofs_velocity(velocity_inputs, dofs_idx)
 
-        self._step_simulation()
+        self.scene.step()
+        self.current_steps_count += 1
 
         observation = self._get_observation_tuple()
         cart_position, cart_velocity, pole_angle, pole_velocity = observation
@@ -241,15 +218,6 @@ class GenCartPoleEnv(gym.Env):
         # info: empty dict
         return self.observation(), reward, self.done, False, self._get_info()
 
-    # def getPoleHeight(self):
-    #     pole_height = self.cartpole.get_link("pole").get_AABB()[1,2] \
-    #                     - self.cartpole.get_joint('cart_to_pole').get_pos()[2]
-
-    #     return pole_height
-    
-    # def getCartPosition(self):
-    #     return self.cartpole.get_link("cart").get_pos()[0]
-    
     def render(self):
         if self.render_mode == "human":
             # retina display workaround
@@ -261,61 +229,74 @@ class GenCartPoleEnv(gym.Env):
         elif self.render_mode == "ansi":
             obs = self._get_observation_tuple()
             print(f"Cart Position: {obs[0]}; Pole Angle: {obs[2]}")
-    
+        elif self.render_mode == "rgb_array":
+            return self.cam.render()[0]
+        
+        raise NotImplementedError(f"Render mode {self.render_mode} is not supported.")
+
+
     def close(self):
         try:
-            # self._stop_viewer()
-            self._stop_recording()
-            if self._temp_video_dir is not None:
-                self._temp_video_dir.cleanup()
+            # Restore gs.destroy() call
             gs.destroy()
         except AttributeError as e:
-            print(f"Failed to close Environment: {e}")
+            print(f"[GenCartPoleEnv] Error during close (AttributeError): {e}")
         except Exception as e:
-            print(f"Failed to clean up Environment: {e}")
+            print(f"[GenCartPoleEnv] Error during close (Exception): {e}")
             
-    
+    # Restore the __del__ method
     def __del__(self):
-        if gs._initialized:
-            self.close()
-    
-    def _stop_recording(self):
-        if not self.cam._in_recording or len(self.cam._recorded_imgs) == 0:
-            return
+        try: # Add try-except block for safety during deletion
+            if gs._initialized:
+                 self.close()
+        except Exception:
+            pass # Avoid errors during garbage collection
 
-        # Only proceed if we have a temporary directory set up
-        if self._temp_video_dir is None:
-            self.cam.stop_recording()
-            return
+def create_genesis_vector_entry(EnvClass) -> callable:
+    """Factory function to create a vectorized Mujoco environment entry point."""
+    def entry_point(**kwargs):
+        """Creates a vectorized, tensor-wrapped, and potentially video-recorded Mujoco environment."""
+
+        wandb_video_episodes = kwargs.get('wandb_video_episodes')
+        record_video = wandb_video_episodes is not None and wandb_video_episodes > 0
+
+        # Determine render mode for workers
+        worker_render_mode = "rgb_array" if record_video else None
+        if worker_render_mode is None and 'render_mode' in kwargs:
+            worker_render_mode = kwargs['render_mode']
+
+        
+        worker_kwargs = kwargs.copy()
+        worker_kwargs['render_mode'] = worker_render_mode
+        
+        env = EnvClass(**worker_kwargs)
+        
+        # Apply the video wrapper *inside* the worker function
+        # This ensures each worker process gets a wrapper instance
+        if record_video:
+            try:
+                fps = EnvClass.metadata.get('render_fps', 30)
+            except AttributeError:
+                fps = 30
             
-        # Create a unique filename in the temporary directory
-        video_filename = f"cartpole_video_{self.current_steps_count}.mp4"
-        video_path = f"{self._temp_video_dir.name}/{video_filename}"
-        
-        # Upload to wandb if it's available and initialized
-        factor = 10
-        images = downsample_list_image_to_video_array(self.cam._recorded_imgs, factor=factor)
-        # self.cam.stop_recording(save_to_filename=video_path, fps=self.metadata["render_fps"])
-        
-        # Upload to wandb if it's available and initialized
-        try:
-            if wandb.run is not None:
-                wandb.log({"cartpole_video": wandb.Video(images, fps=self.metadata["render_fps"]/factor)})
-                # wandb.log({"cartpole_video": wandb.Video(video_path, format="mp4")})
-        except Exception as e:
-            print(f"Failed to upload video to wandb: {e}")
-        
-        self.cam.stop_recording(save_to_filename=video_path)
-    
-    # def _stop_viewer(self):
-    #     # self.scene._visualizer._viewer
-    #     if self.scene.viewer and self.scene.viewer.is_alive():
-    #         self.scene.viewer.stop()
+            # Define the episode trigger based on wandb_video_episodes
+            episode_trigger = lambda ep_id: ep_id % wandb_video_episodes == 0
+            
+            env = RecordVideoWrapper(
+                env,
+                episode_trigger=episode_trigger,
+                name_prefix=f"{kwargs.get('id', 'mujoco-env')}", # Unique prefix per worker
+                fps=fps,
+                record_video=True # Explicitly enable for the wrapper
+            )
+                    
+        return env
 
+    return entry_point
 
 custom_environment_spec = gym.register(id='GenCartPole-v0', 
                                         entry_point=GenCartPoleEnv,
+                                        vector_entry_point=create_genesis_vector_entry(GenCartPoleEnv),
                                         reward_threshold=2000, 
                                         max_episode_steps=2000,
-                                        vector_entry_point=GenCartPoleEnv,
                                         )

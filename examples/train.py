@@ -1,75 +1,112 @@
-import genRL.gym_envs.genesis.cartpole
-import genRL.gym_envs.test_envs.cartpole_dummy
-from genRL.utils import is_cuda_available
-import gymnasium as gym
-import torch.nn.functional as F
-from genRL.runners import get_agent
-import genesis as gs
 import sys
+import os # Import os
+
+# Set MUJOCO_GL environment variable
+os.environ['MUJOCO_GL'] = 'egl'
+
+# Import known environments to register them globally
+import genRL.gym_envs.genesis.cartpole
+import genRL.gym_envs.mujoco.cartpole 
+
 import wandb
-from genRL.runners import training_loop
+from genRL.runners import training_loop, get_agent
 from genesis.utils.misc import get_platform
 import tyro
 from genRL.configs import SessionConfig
+import gymnasium as gym
+import genesis as gs
+from genRL.utils import is_cuda_available
+from genRL.wrappers.vector_numpy_to_torch import AutoTorchWrapper # Import tensor wrapper
+# Import the renamed video wrapper
+from genRL.wrappers.record_video import RecordVideoWrapper 
+from functools import partial # Import partial for wrapper factory
+# Remove multiprocessing import - primitives handled by factory/wrapper
+# import multiprocessing as mp
 
-# python examples/train.py algo:grpo-config --algo.n_epi 60
-# python examples/train.py algo:ppo-config --algo.n_epi 180
-# python examples/train.py algo:ppo-config --algo.n_epi 180 --wandb disabled
+
+# python examples/train.py --env-id MujocoCartPole-v0 --wandb_video_episodes 30 algo:ppo-config --algo.n-epi 180
+# python examples/train.py --env-id MujocoCartPole-v0 --wandb_video_episodes 10 algo:grpo-config --algo.n-epi 60
+# python examples/train.py --env-id GenCartPole-v0 --wandb_video_episodes 30 algo:ppo-config --algo.n-epi 180
+# python examples/train.py --env-id GenCartPole-v0 --wandb_video_episodes 10 algo:grpo-config --algo.n-epi 60
 
 def main():
     args = tyro.cli(
                 SessionConfig,
                 default=SessionConfig(
                     project_name="genRL_cartpole",
-                    run_name="cartpole",
-                    wandb_video_steps=2000,
-                    # algo=PPOConfig(num_envs=8, n_epi=180),
+                    run_name="cartpole_auto_vec", # Generic name
+                    env_id="GenCartPole-v0", # Default env
+                    wandb_video_episodes=20, # Default to every 20 episodes
                 ),
-                description="Minimal RL PPO Cartpole example",
-                config=(tyro.conf.ConsolidateSubcommandArgs,),
+                description="Minimal RL example with auto-vectorization",
             )
 
-
-    # for key, value in dataclasses.asdict(args).items():
-    #     print(f"{key}: {value}")
-    
     config = args.algo
     
     wandb.login()
     run = wandb.init(
                     project=args.project_name,
-                    name=args.run_name,
+                    name=f"{args.env_id}-{args.run_name}", # Include env_id in run name
                     config=config,
-                    mode=args.wandb,
-                    # mode="disabled", # dev dry-run
+                    mode=args.wandb, 
                 )
     
-    env = gym.make("GenCartPole-v0",
-    # env = gym.make("GenCartPole-v0-dummy-ones",
-    # env = gym.make("GenCartPole-dummy_inverse_trig-v0",
-                   render_mode="human" if sys.platform == "darwin" else "ansi",
-                   max_force=1000,
-                   targetVelocity=10,
-                   num_envs=config.num_envs,
-                   return_tensor=True,
-                   wandb_video_steps=config.wandb_video_steps,
-                   logging_level="warning", # "info", "warning", "error", "debug"
-                   gs_backend=gs.gpu if is_cuda_available() else gs.cpu,
-                   seed=args.random_seed,
-                   )
-    
-    agent = get_agent(env, config)
-    env.reset()
+    # --- Environment Creation Logic --- 
+    device = "cuda" if is_cuda_available() else "cpu"
+    gs_backend = gs.gpu if is_cuda_available() else gs.cpu
+
+    # Determine if video recording is needed based on episode count
+    video_episodes = getattr(args, 'wandb_video_episodes', None)
+    record_video = video_episodes is not None and video_episodes > 0
+
+    # Base envs need rgb_array only if recording video
+    base_render_mode = "rgb_array" if record_video else None
+
+    # --- Remove multiprocessing synchronization objects --- 
+    # Primitives are now handled internally by the Mujoco factory or not needed for Genesis
+
+    # --- Define kwargs for gym.make_vec --- 
+    make_vec_kwargs = {
+        "env_id": args.env_id,
+        "num_envs": config.num_envs,
+        "device": device,
+        "seed": args.random_seed, 
+        "render_mode": base_render_mode, # Workers need rgb_array if recording
+        "logging_level": "warning",      # Used by Genesis __init__
+        "gs_backend": gs_backend,      # Used by Genesis __init__
+        "return_tensor": True,         # Used by Genesis __init__
+        "max_force": 100,           # Used by Mujoco __init__
+        "targetVelocity": 10,          # Used by Mujoco __init__
+        # Pass wandb_video_episodes so the MuJoCo factory can use it
+        "wandb_video_episodes": video_episodes,
+    }
+
+    print(f"Creating environment {args.env_id} with gym.make_vec.")
+    # Use gym.make_vec universally. 
+    # For Mujoco, it uses the registered vector_entry_point which handles video wrapping internally.
+    # For Genesis, it returns the base env instance (or internally vectorized one).
+    envs = gym.make_vec(
+        args.env_id, 
+        **make_vec_kwargs
+    )
+
+    agent = get_agent(envs, config)
 
     if get_platform() == "macOS" and sys.gettrace() is None:
-        gs.tools.run_in_another_thread(fn=training_loop, args=(env, agent, config, run))
+        gs.tools.run_in_another_thread(fn=training_loop, args=(envs, agent, config, run))
     else:
-        training_loop(env, agent, config, run)
+        training_loop(envs, agent, config, run)
 
-    env.render()
-    env.close()
+    envs.close()
     
+    if run: 
+        print("Waiting for wandb run to finish syncing...")
+        run.finish()
+        print("Wandb run finished.")
 
 if __name__ == '__main__':
     main()
 
+# TODO:
+#     - Review video trigger logic in RecordSingleEnvVideo if needed.
+#     - Add more tests for mujoco training
