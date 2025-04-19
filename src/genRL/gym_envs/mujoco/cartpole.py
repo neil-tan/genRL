@@ -1,5 +1,5 @@
 import os
-os.environ['MUJOCO_GL'] = 'egl' # Removed: Now set in pyproject.toml
+os.environ['MUJOCO_GL'] = 'egl'
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
