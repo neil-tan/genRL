@@ -160,77 +160,158 @@ class MujocoCartPoleEnv(gym.Env):
         # Ensure renderer is initialized; _initialize_renderer handles the None check
         self._initialize_renderer(render_mode_to_use)
 
+        # Handle case where renderer failed to initialize
         if self.renderer is None:
-            if render_mode_to_use == "ansi": # Handle ANSI rendering even if graphical fails
-                 obs = self._get_obs()
-                 print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
-            return None # Return None if renderer is not available
+            print("[MujocoCartPoleEnv] Render call skipped: Renderer not initialized.")
+            if render_mode_to_use == "ansi": # Still provide ANSI output if possible
+                 try: # Wrap in try-except in case _get_obs fails
+                     obs = self._get_obs()
+                     print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
+                 except Exception as e_ansi:
+                     print(f"[MujocoCartPoleEnv] Error getting obs for ANSI render: {e_ansi}")
+            # Return a blank frame for rgb_array if renderer is None
+            if render_mode_to_use == "rgb_array":
+                print("[MujocoCartPoleEnv] Warning: No renderer available, returning blank frame")
+                return np.zeros((480, 640, 3), dtype=np.uint8)
+            # Return blank depth frame if renderer is None
+            if render_mode_to_use == "depth_array":
+                 print("[MujocoCartPoleEnv] Warning: No renderer available, returning blank depth frame")
+                 return np.zeros((480, 640), dtype=np.float32)
+            return None # Return None for other modes (e.g., human)
 
-        # Use the renderer's camera directly (configured in _initialize_renderer)
+        # --- Renderer is valid, proceed with rendering --- #
         try:
-             self.renderer.update_scene(self.data, camera=self.renderer.camera)
+            # Update the scene with the latest physics state
+            self.renderer.update_scene(self.data)
         except Exception as e:
-             print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Error updating scene: {e}. Falling back to default camera.")
-             try:
-                 self.renderer.update_scene(self.data, camera=-1) # Fallback
-             except Exception as e2:
-                  print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Error updating scene with fallback camera: {e2}")
-                  return None
+            print(f"[MujocoCartPoleEnv] ERROR updating scene: {e}")
+            # If scene update fails, return blank frames for array modes
+            if render_mode_to_use == "rgb_array":
+                return np.zeros((480, 640, 3), dtype=np.uint8)
+            if render_mode_to_use == "depth_array":
+                return np.zeros((480, 640), dtype=np.float32)
+            return None
 
         # --- Rendering Logic ---
         if render_mode_to_use == "human":
-            self.renderer.render()
+            try:
+                self.renderer.render()
+            except Exception as e:
+                print(f"[MujocoCartPoleEnv] Error during human rendering: {e}")
             return None # Human rendering doesn't return frames
+
         elif render_mode_to_use == "rgb_array":
-            return self.renderer.render()
+            try:
+                frame = self.renderer.render()
+                return frame
+            except Exception as e:
+                print(f"[MujocoCartPoleEnv] Error during rgb_array rendering: {e}")
+                # Return blank frame on render error
+                return np.zeros((480, 640, 3), dtype=np.uint8)
+
         elif render_mode_to_use == "depth_array":
-            scene_option = mujoco.MjvOption()
-            scene_option.flags[mujoco.mjtVisFlag.mjVIS_Depth] = True
-            try: # Update scene again with depth flag
-                self.renderer.update_scene(self.data, camera=self.renderer.camera, scene_option=scene_option)
-            except Exception as e_depth:
-                print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Error updating scene for depth: {e_depth}")
-                return None
-            return self.renderer.render()
+            try:
+                # Simple fallback - convert RGB to grayscale
+                # (Actual depth rendering might need different scene options not used here)
+                frame = self.renderer.render()
+                if frame is not None:
+                    # Ensure it's a numpy array before processing
+                    if isinstance(frame, np.ndarray):
+                         # Convert RGB to grayscale as a simple depth approximation
+                         depth_frame = np.mean(frame, axis=2).astype(np.float32)
+                         return depth_frame
+                    else:
+                         print(f"[MujocoCartPoleEnv] Warning: render() returned unexpected type {type(frame)} for depth fallback")
+                         return np.zeros((480, 640), dtype=np.float32)
+                else:
+                    print("[MujocoCartPoleEnv] Warning: render() returned None during depth fallback")
+                    return np.zeros((480, 640), dtype=np.float32)
+            except Exception as e:
+                print(f"[MujocoCartPoleEnv] Error during depth_array rendering fallback: {e}")
+                return np.zeros((480, 640), dtype=np.float32)
+
         elif render_mode_to_use == "ansi":
-            # ANSI already handled if renderer is None, maybe remove redundant code?
-            # Or keep it for cases where render mode is explicitly changed?
-            obs = self._get_obs()
-            print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
+            # ANSI already handled if renderer is None
+            try:
+                obs = self._get_obs()
+                print(f"Pos:{obs[0]: .2f} Vel:{obs[1]: .2f} Ang:{obs[2]: .2f} AngVel:{obs[3]: .2f}")
+            except Exception as e_ansi:
+                 print(f"[MujocoCartPoleEnv] Error getting obs for ANSI render: {e_ansi}")
             return None
+
         else:
             # Should not happen if render_mode validation is correct
+            print(f"[MujocoCartPoleEnv] Warning: Unsupported render mode '{render_mode_to_use}'")
             return None
 
     def _initialize_renderer(self, render_mode_to_use):
-         # Initialize renderer and set camera programmatically
-         if self.renderer is None:
-             if render_mode_to_use in ["human", "rgb_array", "depth_array"]:
-                 try:
-                      render_width = 640
-                      render_height = 480
-                      self.renderer = mujoco.Renderer(self.model, height=render_height, width=render_width)
-                      print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Renderer initialized for mode {render_mode_to_use}.")
+        # Initialize renderer and set camera programmatically
+        if self.renderer is None:
+            if render_mode_to_use in ["human", "rgb_array", "depth_array"]:
+                try:
+                    print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Initializing renderer for mode {render_mode_to_use}...")
+                    render_width = 640
+                    render_height = 480
+                    self.renderer = mujoco.Renderer(self.model, height=render_height, width=render_width)
+                    print(f"  Renderer instance created: {self.renderer}")
+                    print(f"  MuJoCo GL context: {os.environ.get('MUJOCO_GL', 'default')}")
 
-                      # --- Programmatically Set Camera to Track Cart (using mjCAMERA_USER) --- #
-                      cam = self.renderer.camera
-                      target_body_name = "cart"
-                      cart_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, target_body_name)
-                      if cart_body_id != -1:
-                          cam.type = mujoco.mjtCamera.mjCAMERA_USER
-                          cam.trackbodyid = cart_body_id
-                          cam.distance = 2.5
-                          cam.elevation = -25
-                          cam.azimuth = 90
-                          print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Set camera to track body '{target_body_name}' (ID: {cart_body_id}).")
-                      else:
-                          print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Warning: Could not find body '{target_body_name}'. Camera may use defaults.")
-                          # Let it use default free camera if tracking fails
-                      # --- End Programmatic Camera Setup --- #
+                    # --- Programmatically Set Camera to Track Cart (using mjCAMERA_USER) --- #
+                    print("  Setting up camera...")
+                    target_body_name = "cart"
+                    cart_body_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, target_body_name)
+                    print(f"    Target body '{target_body_name}' ID: {cart_body_id}")
 
-                 except Exception as e:
-                      print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Warning: Failed to initialize renderer or set camera: {e}")
-                      self.renderer = None # Ensure renderer is None if setup fails
+                    if cart_body_id != -1:
+                        # Access camera settings through the scene
+                        # Check model for cameras, not the scene
+                        if hasattr(self.renderer, 'scene') and self.model.ncam > 0:
+                            camera_id = getattr(self.renderer, 'camera_id', 0) # Default to camera 0
+                            print(f"    Attempting to configure camera ID: {camera_id} (model ncam={self.model.ncam})")
+                            if camera_id < self.model.ncam:
+                                try:
+                                    # Apply settings directly to the scene's camera array if possible
+                                    if hasattr(self.renderer.scene, 'camera'):
+                                        cam = self.renderer.scene.camera[camera_id]
+                                        cam.type = mujoco.mjtCamera.mjCAMERA_USER
+                                        cam.trackbodyid = cart_body_id
+                                        cam.distance = 3.0
+                                        cam.elevation = -20
+                                        cam.azimuth = 90
+                                        print(f"    Camera {camera_id} configured in scene to track body '{target_body_name}'.")
+                                    else:
+                                        # Fallback: Maybe need to configure camera elsewhere?
+                                        # For now, just log that we couldn't set it in the scene.
+                                        print("    Warning: renderer.scene does not have 'camera' attribute.")
+                                        # We might need to pass camera config to update_scene later instead.
+                                except Exception as e:
+                                    print(f"    Warning: Failed to set camera properties in scene: {e}")
+                            else:
+                                 print(f"    Warning: Invalid camera_id {camera_id} for model ncam {self.model.ncam}.")
+                        else:
+                            print(f"    Warning: Could not access renderer.scene or model has no cameras (ncam={self.model.ncam}).")
+                    else:
+                        print(f"    Warning: Could not find body '{target_body_name}'. Using default camera.")
+                    # --- End Programmatic Camera Setup --- #
+
+                    # --- Lighting Setup --- #
+                    # Completely removed any flag setting code here. Rely on defaults.
+                    print("  Relying on default MuJoCo lighting.")
+                    # --- End Lighting Setup --- #
+
+                    print("  Renderer initialization complete.")
+
+                except Exception as e:
+                     # If renderer creation itself fails, print the error
+                     print(f"  FATAL: Failed to initialize renderer: {e}")
+                     import traceback
+                     traceback.print_exc()
+                     self.renderer = None # Ensure renderer is None if setup fails
+            else:
+                # If render mode doesn't require graphical renderer
+                print(f"[MujocoCartPoleEnv Worker {self.worker_index}] No graphical renderer needed for mode {render_mode_to_use}.")
+        # else:
+            # print(f"[MujocoCartPoleEnv Worker {self.worker_index}] Renderer already initialized.")
 
     def close(self):
         if self.renderer:
