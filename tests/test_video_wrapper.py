@@ -153,26 +153,32 @@ def test_episode_trigger(mock_writer_factory, mock_env, temp_video_dir):
 
     # Trigger recording every 2nd episode (episodes 0, 2, 4, ...)
     trigger = lambda ep_id: ep_id % 2 == 0
-    wrapper = RecordVideoWrapper(mock_env, episode_trigger=trigger, video_folder=temp_video_dir)
+    wrapper = RecordVideoWrapper(mock_env, episode_trigger=trigger)
+    wrapper.video_folder = temp_video_dir
+    wrapper.is_recording_worker = True  # Ensure this flag is set when manually changing video_folder
 
     # Episode 0 (should record)
     wrapper.reset()
     assert wrapper.recording is True
     mock_writer_factory.assert_called_once()
-    wrapper.close()
+    # Only close the video recorder, not the entire wrapper
+    wrapper.close_video_recorder()
 
     # Episode 1 (should NOT record)
     mock_writer_factory.reset_mock()
     wrapper.reset()
     assert wrapper.recording is False
     mock_writer_factory.assert_not_called()
-    wrapper.close()
+    # Only close the video recorder, not the entire wrapper
+    wrapper.close_video_recorder()
 
     # Episode 2 (should record)
     mock_writer_factory.reset_mock()
     wrapper.reset()
     assert wrapper.recording is True
     mock_writer_factory.assert_called_once()
+    
+    # Close the entire wrapper only at the end of the test
     wrapper.close()
 
 @patch('genRL.wrappers.record_video.imageio.get_writer')
@@ -180,31 +186,35 @@ def test_frame_capture(mock_writer_factory, mock_env, temp_video_dir):
     "Test that _capture_frame calls env.render and appends data."
     mock_writer = MagicMock()
     mock_writer_factory.return_value = mock_writer
-    mock_env.render = MagicMock(return_value=np.array([[[0, 0, 0]]], dtype=np.uint8)) # Mock render
+    
+    # Initialize with specific frames for sequence
+    frame0 = np.array([[[0, 0, 0]]], dtype=np.uint8)
+    frame1 = np.array([[[1, 1, 1]]], dtype=np.uint8)
+    frame2 = np.array([[[2, 2, 2]]], dtype=np.uint8)
+    mock_env.render = MagicMock(side_effect=[frame0, frame1, frame2])
 
-    wrapper = RecordVideoWrapper(mock_env, video_folder=temp_video_dir)
+    wrapper = RecordVideoWrapper(mock_env)
+    wrapper.video_folder = temp_video_dir
+    wrapper.is_recording_worker = True  # Ensure this flag is set when manually changing video_folder
 
     # Start recording (default trigger records episode 0)
     wrapper.reset()
     assert wrapper.recording is True
     mock_writer_factory.assert_called_once()
-    mock_env.render.assert_called_once() # Render called during reset capture
+    # First frame (frame0) should be captured during reset
+    
+    # Step and capture next frames
+    wrapper.step(0)  # Step 1 - captures frame1
+    wrapper.step(1)  # Step 2 - captures frame2
 
-    # Step and capture frames
-    mock_env.render.reset_mock()
-    mock_frame1 = np.array([[[1, 1, 1]]], dtype=np.uint8)
-    mock_frame2 = np.array([[[2, 2, 2]]], dtype=np.uint8)
-    mock_env.render.side_effect = [mock_frame1, mock_frame2]
-
-    wrapper.step(0) # Step 1
-    wrapper.step(1) # Step 2
-
-    # Assert render was called twice during steps
-    assert mock_env.render.call_count == 2
-    # Assert append_data was called with the correct frames
+    # Assert render was called the expected number of times (once in reset + twice in steps)
+    assert mock_env.render.call_count == 3
+    
+    # Assert append_data was called with the correct frames in sequence
     mock_writer.append_data.assert_has_calls([
-        call(mock_frame1),
-        call(mock_frame2)
+        call(frame0),
+        call(frame1),
+        call(frame2)
     ])
 
     # Close the wrapper and writer
