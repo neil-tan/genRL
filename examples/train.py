@@ -59,17 +59,22 @@ def main():
     # Primitives are now handled internally by the Mujoco factory or not needed for Genesis
 
     # --- Define kwargs for gym.make_vec --- 
+    mjcf_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../src/genRL/gym_envs/mujoco/../../../../assets/mjcf/cartpole_scene.xml"))
+    if not os.path.exists(mjcf_path):
+        raise FileNotFoundError(f"MJCF file not found for training at: {mjcf_path}")
+        
     make_vec_kwargs = {
         "env_id": args.env_id,
         "num_envs": config.num_envs,
         "device": device,
         "seed": args.random_seed, 
         "render_mode": base_render_mode, # Workers need rgb_array if recording
+        "xml_file": mjcf_path,         # <--- EXPLICITLY ADD MJCF PATH HERE
         "logging_level": "warning",      # Used by Genesis __init__
         "gs_backend": gs_backend,      # Used by Genesis __init__
         "return_tensor": True,         # Used by Genesis __init__
-        "max_force": 100,           # Used by Mujoco __init__
-        "targetVelocity": 10,          # Used by Mujoco __init__
+        "max_force": 10.0,             # Now matches Mujoco default
+        "targetVelocity": 10,          # Used by Mujoco __init__? Check if needed
         # Pass wandb_video_episodes so the MuJoCo factory can use it
         "wandb_video_episodes": video_episodes,
     }

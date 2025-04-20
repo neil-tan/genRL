@@ -1,18 +1,49 @@
 <?xml version="1.0"?>
-<!-- This file is from the Bullet Physics SDK, linked here:
-https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urdf
--->
+<!-- Simplified URDF with Ground Plane -->
 <robot name="physics">
+  <!-- Materials Removed -->
+  <!-- <material name="green"> <color rgba="0 0.8 .8 1"/> </material> -->
+  <!-- <material name="blue"> <color rgba="0 0 .8 1"/> </material> -->
+  <!-- <material name="white"> <color rgba="1 1 1 1"/> </material> -->
+  <!-- <material name="ground_mat"> <color rgba="0.5 0.5 0.5 1"/> </material> -->
+
   <link name="world"/>
+
+  <!-- Ground Plane Link (Keep this definition simple) -->
+  <link name="ground_plane">
+    <visual>
+      <geometry>
+        <box size="30 30 0.1"/>
+      </geometry>
+      <origin xyz="0 0 -0.05"/>
+      <!-- <material name="ground_mat"/> --> <!-- Material ref removed -->
+    </visual>
+    <collision>
+       <geometry>
+         <box size="30 30 0.1"/>
+       </geometry>
+       <origin xyz="0 0 -0.05"/>
+    </collision>
+     <inertial>
+       <mass value="0"/>
+       <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+     </inertial>
+  </link>
+
+  <!-- Connect Ground to World -->
+  <joint name="ground_joint" type="fixed">
+    <parent link="world"/>
+    <child link="ground_plane"/>
+    <origin xyz="0 0 0"/>
+  </joint>
+
+  <!-- Original slideBar link -->
   <link name="slideBar">
-    <visual name="slideBar_visual">
+    <visual>
       <geometry>
         <box size="30 0.05 0.05"/>
       </geometry>
-      <origin xyz="0 0 0"/>
-      <material name="green">
-        <color rgba="0 0.8 .8 1"/>
-      </material>
+      <!-- <material name="green"/> --> <!-- Material ref removed -->
     </visual>
     <inertial>
       <mass value="0.1"/>
@@ -20,21 +51,18 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
     </inertial>
   </link>
 
+  <!-- Original cart link -->
   <link name="cart">
-    <visual name="cart_visual">
+    <visual>
       <geometry>
         <box size="0.5 0.5 0.2"/>
       </geometry>
-      <origin xyz="0 0 0"/>
-      <material name="blue">
-        <color rgba="0 0 .8 1"/>
-      </material>
+      <!-- <material name="blue"/> --> <!-- Material ref removed -->
     </visual>
-    <collision name="cart_collision">
+    <collision>
       <geometry>
-          <box size="0.5 0.5 0.2"/>
+        <box size="0.5 0.5 0.2"/>
       </geometry>
-      <origin xyz="0 0 0"/>
     </collision>
     <inertial>
       <mass value="5"/>
@@ -42,30 +70,29 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
     </inertial>
   </link>
 
+  <!-- Original slider joint -->
   <joint name="slider_to_cart" type="prismatic">
     <axis xyz="1 0 0"/>
-    <origin xyz="0.0 0.0 0.0"/>
     <parent link="slideBar"/>
     <child link="cart"/>
     <limit effort="1000.0" lower="-15" upper="15" velocity="5"/>
   </joint>
 
+  <!-- Original pole link -->
   <link name="pole">
-    <visual name="pole_visual">
+    <visual>
       <geometry>
-        <box size="0.05 0.05 1.0"/>	
+        <box size="0.05 0.05 1.0"/>
       </geometry>
       <origin rpy="0 0 0" xyz="0 0 0.5"/>
-      <material name="white">
-        <color rgba="1 1 1 1"/>
-      </material>
+      <!-- <material name="white"/> --> <!-- Material ref removed -->
     </visual>
     <inertial>
-    <origin xyz="0 0 0.5"/>
+      <origin xyz="0 0 0.5"/>
       <mass value="0.8"/>
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
     </inertial>
-<collision name="pole_collision">
+    <collision>
       <geometry>
         <box size="0.05 0.05 1.0"/>
       </geometry>
@@ -73,17 +100,18 @@ https://github.com/bulletphysics/bullet3/raw/refs/heads/master/data/cartpole.urd
     </collision>
   </link>
 
+  <!-- Original pole joint -->
   <joint name="cart_to_pole" type="continuous">
     <axis xyz="0 1 0"/>
-    <origin xyz="0.0 0.0 0"/>
     <parent link="cart"/>
     <child link="pole"/>
   </joint>
 
+  <!-- Original fixed joint for slideBar -->
   <joint name="fixed" type="fixed">
     <parent link="world"/>
     <child link="slideBar"/>
     <origin xyz="0 0 1"/>
   </joint>
-  
+
 </robot>

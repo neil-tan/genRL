@@ -1,0 +1,44 @@
+<mujoco model="Cartpole Scene">
+  <compiler angle="radian" inertiafromgeom="true"/>
+
+  <option timestep="0.02" gravity="0 0 -9.81" integrator="RK4">
+  </option>
+
+  <visual>
+    <!-- Optional: Set global visual properties like default texture scale -->
+    <map znear="0.01" zfar="50"/>
+    <quality shadowsize="2048"/>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+  </visual>
+
+  <asset>
+    <!-- Define only assets needed for the main scene (ground) -->
+    <texture name="grid" type="2d" builtin="checker" rgb1=".1 .2 .3" rgb2=".2 .3 .4" width="300" height="300" mark="edge" markrgb=".2 .2 .2"/>
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2"/>
+    <!-- Removed conflicting material definitions for green, blue, white -->
+    <!-- Let the included URDF define its own materials -->
+    <!-- <material name="green" rgba="0 0.8 0.8 1"/> -->
+    <!-- <material name="blue" rgba="0 0 0.8 1"/> -->
+    <!-- <material name="white" rgba="1 1 1 1"/> -->
+  </asset>
+
+  <worldbody>
+    <!-- Camera definition removed - will rely on programmatic setup -->
+    <!-- <camera name="fixed_overview" pos="0 -2 2" xyaxes="1 0 0 0 0.8 0.6"/> -->
+    <!-- <camera name="track_cart" mode="targetbody" target="cart" distance="2.0" elevation="-30" azimuth="90"/> -->
+
+    <!-- Ground Plane -->
+    <geom name="floor" size="0 0 .05" type="plane" material="grid" condim="3"/>
+
+    <!-- Lighting -->
+    <light name="top" pos="0 0 2" dir="0 0 -1" diffuse="1 1 1" specular="0.1 0.1 0.1" castshadow="true"/>
+
+    <!-- Body to position the included Cartpole model -->
+    <!-- Include the CONVERTED MJCF robot file -->
+    <body name="cartpole_base" pos="0 0 0">
+      <include file="cartpole_robot.xml"/>
+    </body>
+
+  </worldbody>
+
+</mujoco> 

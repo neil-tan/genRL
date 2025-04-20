@@ -165,6 +165,12 @@ class RecordVideoWrapper(Wrapper):
             return
         
         try:
+            # --- Debug: Check render mode before rendering --- #
+            if self.recorded_frames == 0: # Only print once per recording
+                mode_to_log = getattr(self.env, 'render_mode', 'AttributeNotFound')
+                print(f"[RecordVideoWrapper recorder] Capturing frame. Env render mode: {mode_to_log}")
+            # --- End Debug --- #
+
             # Use the render method of the wrapped environment
             frame = self.env.render() # Assumes render_mode='rgb_array' was set correctly
             
